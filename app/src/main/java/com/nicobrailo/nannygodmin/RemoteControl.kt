@@ -14,8 +14,8 @@ import kotlin.concurrent.thread
 
 class RemoteControl(
     private val context: Context,
-    private val serverUrl: String,
-    private val clientId: String
+    private val settings: ConfigActivity.ProvisioningSettings,
+    private val onUnauthorized: () -> Unit
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var isRunning = false
@@ -28,8 +28,7 @@ class RemoteControl(
             sendReport(JSONObject().apply {
                 put("action", "poll")
             })
-            // TODO: When provisioning the device, retrieve settings like poll interval
-            handler.postDelayed(this, 10000)
+            handler.postDelayed(this, settings.pollIntervalSecs * 1000L)
         }
     }
 
@@ -44,9 +43,25 @@ class RemoteControl(
         handler.removeCallbacks(pollTask)
     }
 
+    /**
+     * Specifically used when the device is no longer allowed to be managed.
+     * Stops everything and forces an unlock.
+     */
+    fun stopAndUnlock() {
+        stop()
+        isLocked = false
+        val unlockIntent = Intent(LockActivity.ACTION_UNLOCK).apply {
+            setPackage(context.packageName)
+        }
+        context.sendBroadcast(unlockIntent)
+    }
+
     fun onUserActivityChanged(oldActivity: String, newActivity: String) {
         this.currentActivity = newActivity
         
+        // If not provisioned or paused (screen off), do nothing
+        if (!isRunning) return
+
         sendReport(JSONObject().apply {
             put("action", "app_change")
             put("new_activity", newActivity)
@@ -59,15 +74,17 @@ class RemoteControl(
     }
 
     fun onScreenStateChanged(isScreenOn: Boolean) {
-        sendReport(JSONObject().apply {
-            put("action", if (isScreenOn) "screen_on" else "screen_off")
-        })
+        if (isRunning) {
+            sendReport(JSONObject().apply {
+                put("action", if (isScreenOn) "screen_on" else "screen_off")
+            })
+        }
     }
 
     private fun sendReport(extraData: JSONObject) {
         thread {
             try {
-                val baseUrl = if (serverUrl.endsWith("/")) serverUrl else "$serverUrl/"
+                val baseUrl = if (settings.serverUrl.endsWith("/")) settings.serverUrl else "${settings.serverUrl}/"
                 val url = URL("${baseUrl}device_report")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
@@ -77,8 +94,7 @@ class RemoteControl(
                 connection.readTimeout = 5000
 
                 val body = JSONObject().apply {
-                    put("clientId", clientId)
-                    // Merge extraData into the body
+                    put("clientId", settings.clientId)
                     val keys = extraData.keys()
                     while (keys.hasNext()) {
                         val key = keys.next()
@@ -90,10 +106,20 @@ class RemoteControl(
 
                 if (connection.responseCode == HttpURLConnection.HTTP_OK) {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    val commands = JSONArray(response)
-                    for (i in 0 until commands.length()) {
-                        handleCommand(commands.getJSONObject(i))
+                    val json = JSONObject(response)
+                    
+                    val locked = json.optBoolean("locked", false)
+                    val commands = json.optJSONArray("commands") ?: JSONArray()
+                    
+                    handler.post {
+                        updateLockState(locked)
+                        for (i in 0 until commands.length()) {
+                            handleCommand(commands.getJSONObject(i))
+                        }
                     }
+                } else if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    Log.w("RemoteControl", "HTTP 401 unauthorized - Stopping Godmin, triggering provisioning flow.")
+                    handler.post { onUnauthorized() }
                 }
             } catch (e: Exception) {
                 Log.e("RemoteControl", "Error sending report: ${e.message}")
@@ -101,31 +127,31 @@ class RemoteControl(
         }
     }
 
-    private fun handleCommand(command: JSONObject) {
-        val name = command.optString("name")
-        handler.post {
-            when (name) {
-                "lock" -> {
-                    Log.d("RemoteControl", "Service requests lock screen")
-                    isLocked = true
-                    if (!currentActivity.contains("LockActivity")) {
-                        startLockActivity()
-                    }
+    private fun updateLockState(locked: Boolean) {
+        if (locked != isLocked) {
+            isLocked = locked
+            if (isLocked) {
+                Log.d("RemoteControl", "Locking device (via server flag)")
+                if (!currentActivity.contains("LockActivity")) {
+                    startLockActivity()
                 }
-                "unlock" -> {
-                    Log.d("RemoteControl", "UNLOCK triggered")
-                    isLocked = false
-                    val unlockIntent = Intent(LockActivity.ACTION_UNLOCK).apply {
-                        setPackage(context.packageName)
-                    }
-                    context.sendBroadcast(unlockIntent)
+            } else {
+                Log.d("RemoteControl", "Unlocking device (via server flag)")
+                val unlockIntent = Intent(LockActivity.ACTION_UNLOCK).apply {
+                    setPackage(context.packageName)
                 }
-                "set_volume" -> {
-                    val volume = command.optInt("arg", 50)
-                    Log.d("RemoteControl", "SET VOL REQD VOL= $volume")
-                    setSystemVolume(volume)
-                }
+                context.sendBroadcast(unlockIntent)
             }
+        }
+    }
+
+    private fun handleCommand(command: JSONObject) {
+        when (val name = command.optString("name")) {
+            "set_volume" -> {
+                val volume = command.optInt("arg", 50)
+                setSystemVolume(volume)
+            }
+            else -> Log.w("RemoteControl", "Unknown command: $name")
         }
     }
 

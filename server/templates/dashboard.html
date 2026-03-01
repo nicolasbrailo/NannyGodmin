@@ -7,25 +7,21 @@
     <style>
         body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 0 20px; color: #333; }
         h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
-        h2 { margin-top: 30px; }
         a { color: #0066cc; }
-        .device-card { border: 1px solid #ddd; border-radius: 6px; padding: 15px; margin-bottom: 20px; }
-        .device-header { display: flex; justify-content: space-between; align-items: center; }
-        .device-name { font-size: 1.2em; font-weight: bold; }
-        .device-id { font-size: 0.8em; color: #999; font-family: monospace; }
-        .controls { margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .device-row { display: flex; align-items: center; gap: 10px; padding: 12px 15px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+        .device-name { font-weight: bold; min-width: 120px; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; font-weight: bold; }
+        .status-locked { background: #e74c3c; color: #fff; }
+        .status-unlocked { background: #2ecc71; color: #fff; }
+        .controls { display: flex; gap: 6px; align-items: center; flex: 1; }
         .controls form { display: inline; }
         button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
         .btn-lock { background: #e74c3c; color: #fff; }
         .btn-unlock { background: #2ecc71; color: #fff; }
-        .btn-remove { background: #999; color: #fff; font-size: 0.8em; }
         .btn-vol { background: #3498db; color: #fff; }
-        input[type=range] { vertical-align: middle; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 0.9em; }
-        th { background: #f5f5f5; }
-        .source-device { color: #2980b9; }
-        .source-controller { color: #8e44ad; }
+        .btn-details { background: #555; color: #fff; font-size: 0.85em; }
+        input[type=range] { vertical-align: middle; width: 100px; }
+        .spacer { flex: 1; }
         .empty { color: #999; font-style: italic; }
     </style>
 </head>
@@ -33,35 +29,27 @@
     <h1>NannyGodmin Dashboard</h1>
     <p><a href="{{ url_for('new_device') }}">+ Add New Device</a></p>
 
-    <h2>Devices</h2>
     {% if devices %}
     {% for device in devices %}
-    <div class="device-card">
-        <div class="device-header">
-            <div>
-                <span class="device-name">{{ device.name }}</span>
-                <div class="device-id">{{ device.id }}</div>
-            </div>
-            <div style="display:flex;gap:6px;">
-                <form action="{{ url_for('clear_history', device_id=device.id) }}" method="post"
-                      onsubmit="return confirm('Clear action history for this device?')">
-                    <button type="submit" class="btn-remove">Clear History</button>
-                </form>
-                <form action="{{ url_for('remove_device', device_id=device.id) }}" method="post"
-                      onsubmit="return confirm('Remove this device?')">
-                    <button type="submit" class="btn-remove">Remove</button>
-                </form>
-            </div>
-        </div>
+    <div class="device-row">
+        <span class="device-name">{{ device.name }}</span>
+        {% if device.locked %}
+        <span class="status-badge status-locked">LOCKED</span>
+        {% else %}
+        <span class="status-badge status-unlocked">UNLOCKED</span>
+        {% endif %}
         <div class="controls">
-            <form action="{{ url_for('send_command', device_id=device.id) }}" method="post">
-                <input type="hidden" name="action" value="lock">
-                <button type="submit" class="btn-lock">Lock</button>
-            </form>
+            {% if device.locked %}
             <form action="{{ url_for('send_command', device_id=device.id) }}" method="post">
                 <input type="hidden" name="action" value="unlock">
                 <button type="submit" class="btn-unlock">Unlock</button>
             </form>
+            {% else %}
+            <form action="{{ url_for('send_command', device_id=device.id) }}" method="post">
+                <input type="hidden" name="action" value="lock">
+                <button type="submit" class="btn-lock">Lock</button>
+            </form>
+            {% endif %}
             <form action="{{ url_for('send_command', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;">
                 <input type="hidden" name="action" value="set_volume">
                 <label>Vol:</label>
@@ -69,28 +57,11 @@
                 <button type="submit" class="btn-vol">Set</button>
             </form>
         </div>
+        <a href="{{ url_for('device_detail', device_id=device.id) }}"><button class="btn-details">Details</button></a>
     </div>
     {% endfor %}
     {% else %}
     <p class="empty">No devices registered. <a href="{{ url_for('new_device') }}">Add one.</a></p>
-    {% endif %}
-
-    <h2>Recent Activity</h2>
-    {% if logs %}
-    <table>
-        <tr><th>Time</th><th>Device</th><th>Action</th><th>Args</th><th>Source</th></tr>
-        {% for log in logs %}
-        <tr>
-            <td>{{ log.timestamp }}</td>
-            <td class="device-id">{{ log.device_id[:8] }}...</td>
-            <td>{{ log.action }}</td>
-            <td>{{ log.args or '' }}</td>
-            <td class="source-{{ log.source }}">{{ log.source }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% else %}
-    <p class="empty">No activity yet.</p>
     {% endif %}
 </body>
 </html>

@@ -4,7 +4,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -24,9 +24,45 @@ import kotlin.concurrent.thread
 
 class ConfigActivity : AppCompatActivity() {
 
+    data class ProvisioningSettings(
+        val serverUrl: String,
+        val clientId: String,
+        val pollIntervalSecs: Int
+    )
+
+    companion object {
+        const val EXTRA_FORCE_REPROVISION = "EXTRA_FORCE_REPROVISION"
+        private const val TAG = "ConfigActivity"
+        private const val PREFS_NAME = "prefs"
+        private const val KEY_SERVER_URL = "server_url"
+        private const val KEY_CLIENT_ID = "client_id"
+        private const val KEY_POLL_INTERVAL = "poll_interval_secs"
+
+        fun getSettings(context: Context): ProvisioningSettings? {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            val url = prefs.getString(KEY_SERVER_URL, null)
+            val id = prefs.getString(KEY_CLIENT_ID, null)
+            val interval = prefs.getInt(KEY_POLL_INTERVAL, 10)
+            return if (url != null && id != null) {
+                ProvisioningSettings(url, id, interval)
+            } else {
+                null
+            }
+        }
+
+        fun clearClientId(context: Context) {
+            context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit(commit = true) {
+                remove(KEY_CLIENT_ID)
+            }
+        }
+    }
+
+    private lateinit var statusWarning: TextView
     private lateinit var urlStatus: TextView
     private lateinit var clientIdStatus: TextView
     private lateinit var urlInput: EditText
+    private lateinit var btnSaveUrl: Button
+    private lateinit var btnUnprovision: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,72 +72,88 @@ class ConfigActivity : AppCompatActivity() {
             setPadding(50, 50, 50, 50)
         }
 
-        val notProvisioned = intent.getBooleanExtra("EXTRA_NOT_PROVISIONED", false)
-        if (notProvisioned) {
-            val warning = TextView(this).apply {
-                text = getString(R.string.device_not_provisioned_yet)
-                setTextColor(android.graphics.Color.RED)
-                textSize = 20f
-                setPadding(0, 0, 0, 20)
-            }
-            layout.addView(warning)
+        // Handle forced re-provisioning request from MainService
+        val forceReprovision = intent.getBooleanExtra(EXTRA_FORCE_REPROVISION, false)
+        if (forceReprovision) {
+            Log.i(TAG, "Forced re-provisioning requested, clearing client_id")
+            ConfigActivity.clearClientId(this)
         }
 
-        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
-        val currentUrl = prefs.getString("server_url", "")
-        val currentClientId = prefs.getString("client_id", "")
+        val settings = ConfigActivity.getSettings(this)
+        val currentUrl = settings?.serverUrl ?: getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_SERVER_URL, "") ?: ""
+        val currentClientId = settings?.clientId ?: ""
 
-        urlStatus = TextView(this).apply {
-            val displayUrl = if (currentUrl.isNullOrEmpty()) {
-                getString(R.string.godmin_url_not_set)
-            } else {
-                currentUrl
-            }
-            text = getString(R.string.current_godmin_url, displayUrl)
-            setPadding(0, 0, 0, 10)
-        }
-        layout.addView(urlStatus)
-
-        clientIdStatus = TextView(this).apply {
-            val displayId = if (currentClientId.isNullOrEmpty()) {
-                getString(R.string.godmin_url_not_set)
-            } else {
-                currentClientId
-            }
-            text = getString(R.string.client_id_status, displayId)
+        statusWarning = TextView(this).apply {
+            textSize = 20f
             setPadding(0, 0, 0, 20)
         }
-        layout.addView(clientIdStatus)
+
+        urlStatus = TextView(this).apply {
+            setPadding(0, 0, 0, 10)
+        }
+
+        clientIdStatus = TextView(this).apply {
+            setPadding(0, 0, 0, 20)
+        }
 
         urlInput = EditText(this).apply {
             setHint(R.string.godmin_url_set_hint)
             setText(currentUrl)
         }
-        layout.addView(urlInput)
 
-        val btnSaveUrl = Button(this).apply {
+        btnSaveUrl = Button(this).apply {
             text = getString(R.string.save_url)
+        }
+
+        btnUnprovision = Button(this).apply {
+            text = getString(R.string.unprovision)
             setOnClickListener {
-                val newUrl = urlInput.text.toString()
-                if (newUrl.isNotEmpty()) {
-                    provisionDevice(newUrl)
-                } else {
-                    Toast.makeText(this@ConfigActivity, R.string.please_enter_url, Toast.LENGTH_SHORT).show()
-                }
+                unprovisionDevice()
             }
         }
+
+        setupPermissionButtons(layout)
+        layout.addView(statusWarning)
+        layout.addView(urlStatus)
+        layout.addView(clientIdStatus)
+        layout.addView(urlInput)
         layout.addView(btnSaveUrl)
+        layout.addView(btnUnprovision)
+
+        // Initial UI state setup
+        updateUI(currentUrl, currentClientId)
+
+        btnSaveUrl.setOnClickListener {
+            val newUrl = urlInput.text.toString().trim()
+            if (newUrl.isNotEmpty()) {
+                btnSaveUrl.isEnabled = false // Gray out immediately
+                provisionDevice(newUrl)
+            } else {
+                Toast.makeText(this@ConfigActivity, R.string.please_enter_url, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         // Handle Deep Link
         intent?.data?.let { uri ->
             if (uri.scheme == "nannygodmin" && uri.host == "config") {
                 val newUrl = uri.getQueryParameter("url")
                 if (newUrl != null) {
+                    btnSaveUrl.isEnabled = false
                     provisionDevice(newUrl)
                 }
             }
         }
 
+        setContentView(layout)
+
+        // Start the service if device is provisioned and we're not forced to re-provision
+        if (settings != null && !forceReprovision) {
+            Log.i(TAG, "Device already provisioned, starting MainService")
+            startForegroundService(Intent(this, MainService::class.java))
+        }
+    }
+
+    private fun setupPermissionButtons(layout: LinearLayout) {
         val dpm = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val adminName = ComponentName(this, AdminReceiver::class.java)
 
@@ -139,21 +191,39 @@ class ConfigActivity : AppCompatActivity() {
         layout.addView(btnEnableAdmin)
         layout.addView(btnUsageStats)
         layout.addView(btnOverlay)
-        setContentView(layout)
+    }
 
-        // Start the service if URL and ClientID are set
-        if (!currentUrl.isNullOrEmpty() && !currentClientId.isNullOrEmpty()) {
-            startForegroundService(Intent(this, MainService::class.java))
+    private fun updateUI(url: String, clientId: String) {
+        val isProvisioned = clientId.isNotEmpty()
+        
+        // Update Status Label
+        if (isProvisioned) {
+            statusWarning.text = getString(R.string.device_provisioned)
+            statusWarning.setTextColor(Color.GREEN)
+        } else {
+            statusWarning.text = getString(R.string.device_not_provisioned_yet)
+            statusWarning.setTextColor(Color.RED)
         }
+
+        // Update URL Label
+        val displayUrl = url.ifEmpty { getString(R.string.godmin_url_not_set) }
+        urlStatus.text = getString(R.string.current_godmin_url, displayUrl)
+
+        // Update ClientID Label
+        val displayId = clientId.ifEmpty { getString(R.string.godmin_url_not_set) }
+        clientIdStatus.text = getString(R.string.client_id_status, displayId)
+
+        // Update Buttons
+        btnSaveUrl.isEnabled = !isProvisioned
+        btnUnprovision.isEnabled = isProvisioned
     }
 
     private fun provisionDevice(newUrl: String) {
-        // Fetch user-defined device name or fallback to model
         val deviceName = Settings.Global.getString(contentResolver, "device_name")
             ?: Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
             ?: Build.MODEL
             
-        Log.d("ConfigActivity", "Provisioning device as: $deviceName")
+        Log.i(TAG, "Attempting to provision device as: $deviceName at $newUrl")
 
         thread {
             try {
@@ -162,6 +232,8 @@ class ConfigActivity : AppCompatActivity() {
                 connection.requestMethod = "POST"
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json")
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
                 
                 val body = JSONObject().apply {
                     put("deviceName", deviceName)
@@ -175,8 +247,9 @@ class ConfigActivity : AppCompatActivity() {
                     val clientId = json.optString("clientId")
                     
                     runOnUiThread {
-                        if (!clientId.isNullOrEmpty()) {
-                            saveProvisioning(newUrl, clientId)
+                        if (clientId.isNotEmpty()) {
+                            Log.i(TAG, "Provisioning success. Received Client ID: $clientId")
+                            saveProvisioning(newUrl, clientId, json.optInt("poll_interval_secs", 10))
                         } else {
                             handleProvisioningFailure(getString(R.string.no_client_id_response))
                         }
@@ -187,6 +260,7 @@ class ConfigActivity : AppCompatActivity() {
                     }
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "Provisioning network error", e)
                 runOnUiThread {
                     handleProvisioningFailure(e.message ?: getString(R.string.unknown_error))
                 }
@@ -194,26 +268,41 @@ class ConfigActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveProvisioning(url: String, clientId: String) {
-        getSharedPreferences("prefs", MODE_PRIVATE).edit {
-            putString("server_url", url)
-            putString("client_id", clientId)
+    private fun unprovisionDevice() {
+        Log.i(TAG, "Manual unprovisioning requested")
+        handleProvisioningFailure("Manual unprovision")
+    }
+
+    private fun saveProvisioning(url: String, clientId: String, pollIntervalSecs: Int) {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit(commit = true) {
+            putString(KEY_SERVER_URL, url)
+            putString(KEY_CLIENT_ID, clientId)
+            putInt(KEY_POLL_INTERVAL, pollIntervalSecs)
         }
-        urlStatus.text = getString(R.string.current_godmin_url, url)
-        clientIdStatus.text = getString(R.string.client_id_status, clientId)
+        
+        updateUI(url, clientId)
         urlInput.setText(url)
+        
         Toast.makeText(this, getString(R.string.url_saved, url), Toast.LENGTH_LONG).show()
         
+        Log.i(TAG, "Provisioning saved, starting MainService")
         startForegroundService(Intent(this, MainService::class.java))
     }
 
-    private fun handleProvisioningFailure(error: String) {
-        getSharedPreferences("prefs", MODE_PRIVATE).edit {
-            remove("server_url")
-            remove("client_id")
+    private fun handleProvisioningFailure(reason: String) {
+        Log.w(TAG, "Provisioning failed or reset: $reason")
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit(commit = true) {
+            remove(KEY_SERVER_URL)
+            remove(KEY_CLIENT_ID)
+            remove(KEY_POLL_INTERVAL)
         }
-        urlStatus.text = getString(R.string.current_godmin_url, getString(R.string.godmin_url_not_set))
-        clientIdStatus.text = getString(R.string.client_id_status, getString(R.string.godmin_url_not_set))
-        Toast.makeText(this, getString(R.string.provisioning_failed, error), Toast.LENGTH_LONG).show()
+        
+        stopService(Intent(this, MainService::class.java))
+        
+        updateUI("", "")
+        
+        if (reason != "Manual unprovision") {
+            Toast.makeText(this, getString(R.string.provisioning_failed, reason), Toast.LENGTH_LONG).show()
+        }
     }
 }

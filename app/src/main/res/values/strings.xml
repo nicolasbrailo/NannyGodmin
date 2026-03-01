@@ -2,11 +2,13 @@
     <string name="app_name">NannyGodmin</string>
     <string name="device_locked">DEVICE LOCKED</string>
     <string name="save_url">Save URL</string>
+    <string name="unprovision">Unprovision Device</string>
     <string name="enable_device_admin">1. Enable Device Admin</string>
     <string name="enable_usage_stats">2. Enable Usage Stats</string>
     <string name="enable_overlay_permission">3. Enable Overlay Permission</string>
     <string name="godmin_url">Current URL: %1$s</string>
-    <string name="device_not_provisioned_yet">Device not provisioned yet</string>
+    <string name="device_not_provisioned_yet">Device unprovisioned</string>
+    <string name="device_provisioned">Device provisioned</string>
     <string name="current_godmin_url">Current URL: %1$s</string>
     <string name="godmin_url_not_set">Not set</string>
     <string name="godmin_url_set_hint">Enter Server URL manually</string>

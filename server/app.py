@@ -44,6 +44,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS devices (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
+            locked INTEGER NOT NULL DEFAULT 0,
             registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS action_log (
@@ -69,10 +70,7 @@ def dashboard():
     devices = db.execute(
         "SELECT * FROM devices ORDER BY registered_at DESC"
     ).fetchall()
-    logs = db.execute(
-        "SELECT * FROM action_log ORDER BY timestamp DESC LIMIT 100"
-    ).fetchall()
-    return render_template("dashboard.html", devices=devices, logs=logs)
+    return render_template("dashboard.html", devices=devices)
 
 
 @app.route("/new_device")
@@ -98,7 +96,7 @@ def provision():
         "INSERT INTO devices (id, name) VALUES (?, ?)", (client_id, device_name)
     )
     db.commit()
-    return jsonify({"clientId": client_id})
+    return jsonify({"clientId": client_id, "locked": False, "poll_interval_secs": 5})
 
 
 @app.route("/device_report", methods=["POST"])
@@ -113,9 +111,9 @@ def device_report():
     db = get_db()
 
     # Verify device exists
-    device = db.execute("SELECT id FROM devices WHERE id = ?", (client_id,)).fetchone()
+    device = db.execute("SELECT id, locked FROM devices WHERE id = ?", (client_id,)).fetchone()
     if not device:
-        return jsonify({"error": "unknown device"}), 404
+        return jsonify({"error": "unknown device"}), 401
 
     # Log the reported action if one was provided
     if action and action != "poll":
@@ -134,7 +132,20 @@ def device_report():
         db.execute("DELETE FROM pending_commands WHERE device_id = ?", (client_id,))
 
     db.commit()
-    return jsonify(commands)
+    return jsonify({"commands": commands, "locked": bool(device["locked"])})
+
+
+@app.route("/device/<device_id>")
+def device_detail(device_id):
+    db = get_db()
+    device = db.execute("SELECT * FROM devices WHERE id = ?", (device_id,)).fetchone()
+    if not device:
+        return "Device not found", 404
+    logs = db.execute(
+        "SELECT * FROM action_log WHERE device_id = ? ORDER BY timestamp DESC LIMIT 100",
+        (device_id,),
+    ).fetchall()
+    return render_template("device_detail.html", device=device, logs=logs)
 
 
 @app.route("/device/<device_id>/clear_history", methods=["POST"])
@@ -142,7 +153,7 @@ def clear_history(device_id):
     db = get_db()
     db.execute("DELETE FROM action_log WHERE device_id = ?", (device_id,))
     db.commit()
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("device_detail", device_id=device_id))
 
 
 @app.route("/device/<device_id>/remove", methods=["POST"])
@@ -160,41 +171,38 @@ def send_command(device_id):
     action = request.form.get("action")
     value = request.form.get("value")
 
-    if action == "set_volume":
-        cmd = {"name": "set_volume", "arg": int(value)}
+    db = get_db()
+
+    if action in ("lock", "unlock"):
+        # Lock state is delivered via the response to every device report,
+        # so we only need to update the column — no pending command needed.
+        db.execute(
+            "UPDATE devices SET locked = ? WHERE id = ?",
+            (1 if action == "lock" else 0, device_id),
+        )
     else:
         cmd = {"name": action}
+        if action == "set_volume":
+            cmd["arg"] = int(value)
 
-    # Commands that supersede each other
-    OVERRIDE_GROUPS = [
-        {"set_volume"},
-        {"lock", "unlock"},
-    ]
-    override_names = {action}
-    for group in OVERRIDE_GROUPS:
-        if action in group:
-            override_names = group
-            break
+        # Remove any pending commands that the new one supersedes
+        db.execute(
+            "DELETE FROM pending_commands WHERE device_id = ? AND "
+            "json_extract(command, '$.name') = ?",
+            (device_id, action),
+        )
+        db.execute(
+            "INSERT INTO pending_commands (device_id, command) VALUES (?, ?)",
+            (device_id, json.dumps(cmd)),
+        )
 
-    db = get_db()
-    # Remove any pending commands that the new one supersedes
-    placeholders = ",".join("?" * len(override_names))
-    db.execute(
-        f"DELETE FROM pending_commands WHERE device_id = ? AND "
-        f"json_extract(command, '$.name') IN ({placeholders})",
-        (device_id, *override_names),
-    )
-    db.execute(
-        "INSERT INTO pending_commands (device_id, command) VALUES (?, ?)",
-        (device_id, json.dumps(cmd)),
-    )
-    # Also log the command
+    # Log the command
     db.execute(
         "INSERT INTO action_log (device_id, action, args, source) VALUES (?, ?, ?, ?)",
-        (device_id, action, json.dumps(cmd) if value else None, "controller"),
+        (device_id, action, json.dumps({"value": value}) if value else None, "controller"),
     )
     db.commit()
-    return redirect(url_for("dashboard"))
+    return redirect(request.referrer or url_for("dashboard"))
 
 
 if __name__ == "__main__":

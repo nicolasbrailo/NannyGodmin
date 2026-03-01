@@ -59,23 +59,26 @@ class MainService : Service() {
     }
 
     private fun initializeComponents() {
-        val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
-        val serverUrl = prefs.getString("server_url", null)
-        val clientId = prefs.getString("client_id", null)
+        val settings = ConfigActivity.getSettings(this)
         
-        if (serverUrl == null || clientId == null) {
-            Log.i("MainService", "Device not provisioned, launching config")
-            val configIntent = Intent(this, ConfigActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                putExtra("EXTRA_NOT_PROVISIONED", true)
-            }
-            startActivity(configIntent)
+        if (settings == null) {
+            launchConfigActivity()
             return
         }
 
-        Log.i("MainService", "NannyGodmin waking up, report URL: $serverUrl")
+        Log.i("MainService", "NannyGodmin waking up, report URL: ${settings.serverUrl}")
 
-        remoteControl = RemoteControl(this, serverUrl, clientId)
+        // Directly passing the settings object to RemoteControl
+        remoteControl = RemoteControl(this, settings) {
+            // Callback for 401 unauthorized / unprovisioned
+            Log.w("MainService", "RemoteControl reported unauth, triggering re-provisioning...")
+            
+            // Delegate clearing state to ConfigActivity
+            ConfigActivity.clearClientId(this)
+            
+            stopAllComponentsAndUnlock()
+            launchConfigActivity(forceReprovision = true)
+        }
 
         activityTracker = UserActivityTracker(this) { prevAct, newAct ->
             remoteControl.onUserActivityChanged(prevAct, newAct)
@@ -83,6 +86,24 @@ class MainService : Service() {
 
         activityTracker.start()
         remoteControl.start()
+    }
+
+    private fun stopAllComponentsAndUnlock() {
+        if (::remoteControl.isInitialized) {
+            remoteControl.stopAndUnlock()
+        }
+        if (::activityTracker.isInitialized) {
+            activityTracker.stop()
+        }
+    }
+
+    private fun launchConfigActivity(forceReprovision: Boolean = false) {
+        Log.i("MainService", "Launching configuration (forceReprovision=$forceReprovision)")
+        val configIntent = Intent(this, ConfigActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(ConfigActivity.EXTRA_FORCE_REPROVISION, forceReprovision)
+        }
+        startActivity(configIntent)
     }
 
     private fun showNotification() {
