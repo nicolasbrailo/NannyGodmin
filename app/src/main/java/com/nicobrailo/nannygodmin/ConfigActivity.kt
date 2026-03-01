@@ -79,9 +79,9 @@ class ConfigActivity : AppCompatActivity() {
             ConfigActivity.clearClientId(this)
         }
 
-        val settings = ConfigActivity.getSettings(this)
-        val currentUrl = settings?.serverUrl ?: getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_SERVER_URL, "") ?: ""
-        val currentClientId = settings?.clientId ?: ""
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val currentUrl = prefs.getString(KEY_SERVER_URL, "") ?: ""
+        val currentClientId = prefs.getString(KEY_CLIENT_ID, "") ?: ""
 
         statusWarning = TextView(this).apply {
             textSize = 20f
@@ -147,6 +147,7 @@ class ConfigActivity : AppCompatActivity() {
         setContentView(layout)
 
         // Start the service if device is provisioned and we're not forced to re-provision
+        val settings = ConfigActivity.getSettings(this)
         if (settings != null && !forceReprovision) {
             Log.i(TAG, "Device already provisioned, starting MainService")
             startForegroundService(Intent(this, MainService::class.java))
@@ -188,9 +189,17 @@ class ConfigActivity : AppCompatActivity() {
             }
         }
 
+        val btnAccessibility = Button(this).apply {
+            text = getString(R.string.enable_accessibility_service)
+            setOnClickListener {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        }
+
         layout.addView(btnEnableAdmin)
         layout.addView(btnUsageStats)
         layout.addView(btnOverlay)
+        layout.addView(btnAccessibility)
     }
 
     private fun updateUI(url: String, clientId: String) {

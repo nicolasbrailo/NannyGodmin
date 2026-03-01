@@ -2,12 +2,15 @@ package com.nicobrailo.nannygodmin
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.concurrent.thread
@@ -81,17 +84,23 @@ class RemoteControl(
         }
     }
 
+    private fun createConnection(path: String, contentType: String, timeoutMs: Int = 5000): HttpURLConnection {
+        val baseUrl = if (settings.serverUrl.endsWith("/")) settings.serverUrl else "${settings.serverUrl}/"
+        val url = URL("$baseUrl$path")
+        return (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Content-Type", contentType)
+            setRequestProperty("X-Client-Id", settings.clientId)
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
+        }
+    }
+
     private fun sendReport(extraData: JSONObject) {
         thread {
             try {
-                val baseUrl = if (settings.serverUrl.endsWith("/")) settings.serverUrl else "${settings.serverUrl}/"
-                val url = URL("${baseUrl}device_report")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
+                val connection = createConnection("device_report", "application/json")
 
                 val body = JSONObject().apply {
                     put("clientId", settings.clientId)
@@ -151,7 +160,46 @@ class RemoteControl(
                 val volume = command.optInt("arg", 50)
                 setSystemVolume(volume)
             }
+            "screenshot" -> {
+                Log.d("RemoteControl", "Screenshot command received")
+                takeAndSendScreenshot()
+            }
             else -> Log.w("RemoteControl", "Unknown command: $name")
+        }
+    }
+
+    private fun takeAndSendScreenshot() {
+        NannyAccessibilityService.takeScreenshot(ContextCompat.getMainExecutor(context)) { bitmap ->
+            if (bitmap != null) {
+                uploadScreenshot(bitmap)
+            } else {
+                Log.e("RemoteControl", "Failed to take screenshot")
+            }
+        }
+    }
+
+    private fun uploadScreenshot(bitmap: Bitmap) {
+        thread {
+            try {
+                val connection = createConnection("device_report/screenshot", "image/png", 15000)
+
+                val stream = ByteArrayOutputStream()
+                // PNG compression quality parameter is ignored
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                val byteArray = stream.toByteArray()
+
+                connection.outputStream.use { it.write(byteArray) }
+
+                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                    Log.d("RemoteControl", "Screenshot uploaded successfully")
+                } else {
+                    Log.e("RemoteControl", "Screenshot upload failed: ${connection.responseCode}")
+                }
+            } catch (e: Exception) {
+                Log.e("RemoteControl", "Error uploading screenshot: ${e.message}")
+            } finally {
+                bitmap.recycle()
+            }
         }
     }
 

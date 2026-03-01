@@ -1,15 +1,18 @@
 import io
 import json
+import os
 import socket
 import sqlite3
 import uuid
 from base64 import b64encode
+from datetime import datetime, timezone
 
 import qrcode
 from flask import Flask, g, jsonify, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 DATABASE = "nannygodmin.sqlite"
+SCREENSHOTS_DIR = "screenshots"
 
 
 def get_local_ip():
@@ -135,6 +138,35 @@ def device_report():
     return jsonify({"commands": commands, "locked": bool(device["locked"])})
 
 
+@app.route("/device_report/screenshot", methods=["POST"])
+def device_report_screenshot():
+    client_id = request.headers.get("X-Client-Id")
+    if not client_id:
+        return jsonify({"error": "X-Client-Id header is required"}), 400
+
+    db = get_db()
+    device = db.execute("SELECT id FROM devices WHERE id = ?", (client_id,)).fetchone()
+    if not device:
+        return jsonify({"error": "unknown device"}), 401
+
+    data = request.get_data()
+    if not data:
+        return jsonify({"error": "empty body"}), 400
+
+    os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
+    path = os.path.join(SCREENSHOTS_DIR, f"{client_id}_screenshot.png")
+    with open(path, "wb") as f:
+        f.write(data)
+
+    return jsonify({"ok": True})
+
+
+@app.route("/screenshots/<filename>")
+def serve_screenshot(filename):
+    from flask import send_from_directory
+    return send_from_directory(SCREENSHOTS_DIR, filename)
+
+
 @app.route("/device/<device_id>")
 def device_detail(device_id):
     db = get_db()
@@ -145,7 +177,22 @@ def device_detail(device_id):
         "SELECT * FROM action_log WHERE device_id = ? ORDER BY timestamp DESC LIMIT 100",
         (device_id,),
     ).fetchall()
-    return render_template("device_detail.html", device=device, logs=logs)
+
+    screenshot_path = os.path.join(SCREENSHOTS_DIR, f"{device_id}_screenshot.png")
+    screenshot_url = None
+    screenshot_time = None
+    if os.path.exists(screenshot_path):
+        screenshot_url = url_for("serve_screenshot", filename=f"{device_id}_screenshot.png")
+        mtime = os.path.getmtime(screenshot_path)
+        screenshot_time = datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    return render_template(
+        "device_detail.html",
+        device=device,
+        logs=logs,
+        screenshot_url=screenshot_url,
+        screenshot_time=screenshot_time,
+    )
 
 
 @app.route("/device/<device_id>/clear_history", methods=["POST"])
