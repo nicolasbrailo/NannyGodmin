@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">NannyGodmin</string>
+    <string name="device_locked">DEVICE LOCKED</string>
+    <string name="save_url">Save URL</string>
+    <string name="enable_device_admin">1. Enable Device Admin</string>
+    <string name="enable_usage_stats">2. Enable Usage Stats</string>
+    <string name="enable_overlay_permission">3. Enable Overlay Permission</string>
+    <string name="godmin_url">Current URL: %1$s</string>
+    <string name="device_not_provisioned_yet">Device not provisioned yet</string>
+    <string name="current_godmin_url">Current URL: %1$s</string>
+    <string name="godmin_url_not_set">Not set</string>
+    <string name="godmin_url_set_hint">Enter Server URL manually</string>
+    <string name="please_enter_url">Please enter a URL</string>
+    <string name="admin_already_active">Admin is already active</string>
+    <string name="admin_explanation">Required to prevent uninstallation.</string>
+    <string name="url_saved">URL Saved: %1$s</string>
+    <string name="client_id_status">Client ID: %1$s</string>
+    <string name="provisioning_failed">Registration failed: %1$s</string>
+    <string name="provisioning_failed_generic">Registration failed</string>
+    <string name="no_client_id_response">No clientId in response</string>
+    <string name="server_returned_error">Server returned %1$d</string>
+    <string name="unknown_error">Unknown error</string>
+</resources>
