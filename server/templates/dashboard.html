@@ -23,11 +23,56 @@
         input[type=range] { vertical-align: middle; width: 100px; }
         .spacer { flex: 1; }
         .empty { color: #999; font-style: italic; }
+        .bulk-controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .bulk-controls form { display: inline; }
+        .btn-timed { background: #f39c12; color: #fff; }
+        .relock-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; font-weight: bold; }
     </style>
 </head>
 <body>
     <h1>NannyGodmin Dashboard</h1>
     <p><a href="{{ url_for('new_device') }}">+ Add New Device</a></p>
+
+    {% if relock_at %}
+    <div class="relock-banner" id="relock-banner">
+        Devices will re-lock in <span id="relock-countdown">--:--</span>
+    </div>
+    <script>
+    (function() {
+        var relockAt = new Date("{{ relock_at }}");
+        var el = document.getElementById("relock-countdown");
+        function update() {
+            var diff = Math.max(0, Math.floor((relockAt - new Date()) / 1000));
+            var m = Math.floor(diff / 60), s = diff % 60;
+            el.textContent = m + ":" + (s < 10 ? "0" : "") + s;
+            if (diff <= 0) { clearInterval(iv); location.reload(); }
+        }
+        update();
+        var iv = setInterval(update, 1000);
+    })();
+    </script>
+    {% endif %}
+
+    <div class="bulk-controls">
+        <form action="{{ url_for('bulk_command') }}" method="post">
+            <input type="hidden" name="action" value="lock_all">
+            <button type="submit" class="btn-lock">Lock All</button>
+        </form>
+        <form action="{{ url_for('bulk_command') }}" method="post">
+            <input type="hidden" name="action" value="unlock_all">
+            <button type="submit" class="btn-unlock">Unlock All</button>
+        </form>
+        <form action="{{ url_for('bulk_command') }}" method="post">
+            <input type="hidden" name="action" value="unlock_all_timed">
+            <input type="hidden" name="duration" value="30">
+            <button type="submit" class="btn-timed">Unlock All (30 min)</button>
+        </form>
+        <form action="{{ url_for('bulk_command') }}" method="post">
+            <input type="hidden" name="action" value="unlock_all_timed">
+            <input type="hidden" name="duration" value="60">
+            <button type="submit" class="btn-timed">Unlock All (1 hr)</button>
+        </form>
+    </div>
 
     {% if devices %}
     {% for device in devices %}

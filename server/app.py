@@ -3,9 +3,11 @@ import json
 import os
 import socket
 import sqlite3
+import threading
 import uuid
 from base64 import b64encode
-from datetime import datetime, timezone
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 import qrcode
 from flask import Flask, g, jsonify, redirect, render_template, request, url_for
@@ -13,6 +15,9 @@ from flask import Flask, g, jsonify, redirect, render_template, request, url_for
 app = Flask(__name__)
 DATABASE = "nannygodmin.sqlite"
 SCREENSHOTS_DIR = "screenshots"
+
+_relock_timer = None
+_relock_at = None
 
 
 def get_local_ip():
@@ -67,13 +72,78 @@ def init_db():
     db.close()
 
 
+def compute_usage_timeline(db, device_id):
+    rows = db.execute(
+        "SELECT timestamp, action, source FROM action_log "
+        "WHERE device_id = ? AND action IN ('screen_on', 'screen_off', 'lock', 'unlock') "
+        "ORDER BY timestamp ASC",
+        (device_id,),
+    ).fetchall()
+
+    screen_on = False
+    server_locked = False
+    active = False
+    transitions = []
+
+    for row in rows:
+        ts = row["timestamp"]
+        action = row["action"]
+        source = row["source"]
+
+        if action == "screen_on":
+            screen_on = True
+        elif action == "screen_off":
+            screen_on = False
+        elif action == "lock" and source == "controller":
+            server_locked = True
+        elif action == "unlock" and source == "controller":
+            server_locked = False
+        else:
+            continue
+
+        new_active = screen_on and not server_locked
+        if new_active != active:
+            active = new_active
+            transitions.append({
+                "timestamp": ts,
+                "screen_on": screen_on,
+                "server_locked": server_locked,
+                "active": active,
+            })
+
+    # Compute daily active hours from transitions
+    daily_hours = defaultdict(float)
+    for i, t in enumerate(transitions):
+        if not t["active"]:
+            continue
+        start = datetime.fromisoformat(t["timestamp"])
+        if i + 1 < len(transitions):
+            end = datetime.fromisoformat(transitions[i + 1]["timestamp"])
+        else:
+            end = datetime.now(timezone.utc) if start.tzinfo else datetime.now()
+
+        # Split interval at midnight boundaries
+        cursor = start
+        while cursor < end:
+            day_str = cursor.strftime("%Y-%m-%d")
+            midnight = (cursor + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            segment_end = min(end, midnight)
+            daily_hours[day_str] += (segment_end - cursor).total_seconds() / 3600
+            cursor = segment_end
+
+    # Sort by date
+    daily_hours = dict(sorted(daily_hours.items()))
+    return transitions, daily_hours
+
+
 @app.route("/")
 def dashboard():
     db = get_db()
     devices = db.execute(
         "SELECT * FROM devices ORDER BY registered_at DESC"
     ).fetchall()
-    return render_template("dashboard.html", devices=devices)
+    relock_at = _relock_at.isoformat() if _relock_at else None
+    return render_template("dashboard.html", devices=devices, relock_at=relock_at)
 
 
 @app.route("/new_device")
@@ -186,12 +256,16 @@ def device_detail(device_id):
         mtime = os.path.getmtime(screenshot_path)
         screenshot_time = datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
+    transitions, daily_hours = compute_usage_timeline(db, device_id)
+
     return render_template(
         "device_detail.html",
         device=device,
         logs=logs,
         screenshot_url=screenshot_url,
         screenshot_time=screenshot_time,
+        transitions=transitions,
+        daily_hours=daily_hours,
     )
 
 
@@ -250,6 +324,68 @@ def send_command(device_id):
     )
     db.commit()
     return redirect(request.referrer or url_for("dashboard"))
+
+
+def _relock_devices(device_ids):
+    global _relock_timer, _relock_at
+    db = sqlite3.connect(DATABASE)
+    db.execute("PRAGMA foreign_keys = ON")
+    for did in device_ids:
+        db.execute("UPDATE devices SET locked = 1 WHERE id = ?", (did,))
+        db.execute(
+            "INSERT INTO action_log (device_id, action, source) VALUES (?, 'lock', 'controller')",
+            (did,),
+        )
+    db.commit()
+    db.close()
+    _relock_timer = None
+    _relock_at = None
+
+
+@app.route("/bulk_command", methods=["POST"])
+def bulk_command():
+    global _relock_timer, _relock_at
+    action = request.form.get("action")
+    db = get_db()
+    devices = db.execute("SELECT id, locked FROM devices").fetchall()
+
+    if _relock_timer is not None:
+        _relock_timer.cancel()
+        _relock_timer = None
+        _relock_at = None
+
+    if action == "lock_all":
+        for d in devices:
+            db.execute("UPDATE devices SET locked = 1 WHERE id = ?", (d["id"],))
+            db.execute(
+                "INSERT INTO action_log (device_id, action, source) VALUES (?, 'lock', 'controller')",
+                (d["id"],),
+            )
+    elif action == "unlock_all":
+        for d in devices:
+            db.execute("UPDATE devices SET locked = 0 WHERE id = ?", (d["id"],))
+            db.execute(
+                "INSERT INTO action_log (device_id, action, source) VALUES (?, 'unlock', 'controller')",
+                (d["id"],),
+            )
+    elif action == "unlock_all_timed":
+        duration_mins = int(request.form.get("duration", 30))
+        # Snapshot: remember which devices are currently locked
+        snapshot = [d["id"] for d in devices if d["locked"]]
+        for d in devices:
+            db.execute("UPDATE devices SET locked = 0 WHERE id = ?", (d["id"],))
+            db.execute(
+                "INSERT INTO action_log (device_id, action, source) VALUES (?, 'unlock', 'controller')",
+                (d["id"],),
+            )
+        if snapshot:
+            _relock_at = datetime.now(timezone.utc) + timedelta(minutes=duration_mins)
+            _relock_timer = threading.Timer(duration_mins * 60, _relock_devices, args=[snapshot])
+            _relock_timer.daemon = True
+            _relock_timer.start()
+
+    db.commit()
+    return redirect(url_for("dashboard"))
 
 
 if __name__ == "__main__":

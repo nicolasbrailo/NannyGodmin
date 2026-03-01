@@ -82,6 +82,49 @@
         {% endif %}
     </div>
 
+    <h2>Usage Report</h2>
+    {% if transitions %}
+    <h3>State Transitions</h3>
+    <table>
+        <tr><th>Time</th><th>Screen</th><th>Server Locked</th><th>Active</th></tr>
+        {% for t in transitions %}
+        <tr>
+            <td>{{ t.timestamp }}</td>
+            <td>{{ "On" if t.screen_on else "Off" }}</td>
+            <td>{{ "Yes" if t.server_locked else "No" }}</td>
+            <td style="color: {{ '#2ecc71' if t.active else '#e74c3c' }}; font-weight: bold;">{{ "Yes" if t.active else "No" }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p class="empty">No screen or lock events recorded yet.</p>
+    {% endif %}
+
+    {% if daily_hours %}
+    <h3>Daily Usage Hours</h3>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dygraph/2.2.1/dygraph.min.css">
+    <div id="usage-graph" style="width:100%;height:300px;margin-top:10px;"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dygraph/2.2.1/dygraph.min.js"></script>
+    <script>
+    (function() {
+        var data = "Date,Hours\n";
+        {% for date, hours in daily_hours.items() %}
+        data += "{{ date }},{{ '%.2f' % hours }}\n";
+        {% endfor %}
+        new Dygraph(document.getElementById("usage-graph"), data, {
+            ylabel: "Hours",
+            plotter: Dygraph.Plotters.barChartPlotter || Dygraph.defaultPlotter,
+            drawPoints: true,
+            strokeWidth: 0,
+            pointSize: 4,
+            fillGraph: true,
+            colors: ["#3498db"],
+            axes: { y: { valueRange: [0, null] } }
+        });
+    })();
+    </script>
+    {% endif %}
+
     <div class="actions">
         <form action="{{ url_for('clear_history', device_id=device.id) }}" method="post"
               onsubmit="return confirm('Clear action history for this device?')">

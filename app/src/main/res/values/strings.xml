@@ -7,6 +7,7 @@
     <string name="enable_usage_stats">2. Enable Usage Stats</string>
     <string name="enable_overlay_permission">3. Enable Overlay Permission</string>
     <string name="enable_accessibility_service">4. Enable Accessibility Service</string>
+    <string name="accessibility_description">Required for remote screenshot and interaction monitoring.</string>
     <string name="godmin_url">Current URL: %1$s</string>
     <string name="device_not_provisioned_yet">Device unprovisioned</string>
     <string name="device_provisioned">Device provisioned</string>

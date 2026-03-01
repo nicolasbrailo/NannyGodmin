@@ -77,11 +77,9 @@ class RemoteControl(
     }
 
     fun onScreenStateChanged(isScreenOn: Boolean) {
-        if (isRunning) {
-            sendReport(JSONObject().apply {
-                put("action", if (isScreenOn) "screen_on" else "screen_off")
-            })
-        }
+        sendReport(JSONObject().apply {
+            put("action", if (isScreenOn) "screen_on" else "screen_off")
+        })
     }
 
     private fun createConnection(path: String, contentType: String, timeoutMs: Int = 5000): HttpURLConnection {
@@ -113,7 +111,8 @@ class RemoteControl(
 
                 connection.outputStream.use { it.write(body.toByteArray()) }
 
-                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val responseCode = connection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
                     val json = JSONObject(response)
                     
@@ -126,9 +125,11 @@ class RemoteControl(
                             handleCommand(commands.getJSONObject(i))
                         }
                     }
-                } else if (connection.responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                } else if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
                     Log.w("RemoteControl", "HTTP 401 unauthorized - Stopping Godmin, triggering provisioning flow.")
                     handler.post { onUnauthorized() }
+                } else {
+                    Log.e("RemoteControl", "Server returned unexpected status: $responseCode")
                 }
             } catch (e: Exception) {
                 Log.e("RemoteControl", "Error sending report: ${e.message}")
@@ -160,7 +161,7 @@ class RemoteControl(
                 val volume = command.optInt("arg", 50)
                 setSystemVolume(volume)
             }
-            "screenshot" -> {
+            "send_screenshot" -> {
                 Log.d("RemoteControl", "Screenshot command received")
                 takeAndSendScreenshot()
             }
@@ -190,10 +191,11 @@ class RemoteControl(
 
                 connection.outputStream.use { it.write(byteArray) }
 
-                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                val responseCode = connection.responseCode
+                if (responseCode == HttpURLConnection.HTTP_OK) {
                     Log.d("RemoteControl", "Screenshot uploaded successfully")
                 } else {
-                    Log.e("RemoteControl", "Screenshot upload failed: ${connection.responseCode}")
+                    Log.e("RemoteControl", "Screenshot upload failed: $responseCode")
                 }
             } catch (e: Exception) {
                 Log.e("RemoteControl", "Error uploading screenshot: ${e.message}")

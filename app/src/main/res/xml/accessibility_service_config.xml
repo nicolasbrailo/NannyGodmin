@@ -5,4 +5,5 @@
     android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
-    android:notificationTimeout="100" />
+    android:notificationTimeout="100"
+    android:description="@string/accessibility_description" />

@@ -79,9 +79,9 @@ class ConfigActivity : AppCompatActivity() {
             ConfigActivity.clearClientId(this)
         }
 
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val currentUrl = prefs.getString(KEY_SERVER_URL, "") ?: ""
-        val currentClientId = prefs.getString(KEY_CLIENT_ID, "") ?: ""
+        val settings = ConfigActivity.getSettings(this)
+        val currentUrl = settings?.serverUrl ?: getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_SERVER_URL, "") ?: ""
+        val currentClientId = settings?.clientId ?: ""
 
         statusWarning = TextView(this).apply {
             textSize = 20f
@@ -147,7 +147,6 @@ class ConfigActivity : AppCompatActivity() {
         setContentView(layout)
 
         // Start the service if device is provisioned and we're not forced to re-provision
-        val settings = ConfigActivity.getSettings(this)
         if (settings != null && !forceReprovision) {
             Log.i(TAG, "Device already provisioned, starting MainService")
             startForegroundService(Intent(this, MainService::class.java))
@@ -192,7 +191,10 @@ class ConfigActivity : AppCompatActivity() {
         val btnAccessibility = Button(this).apply {
             text = getString(R.string.enable_accessibility_service)
             setOnClickListener {
+                // Simplified: Just open the accessibility menu.
+                // Tell user to look for NannyGodmin in Downloaded/Installed Apps.
                 startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                Toast.makeText(this@ConfigActivity, "Look for NannyGodmin under 'Downloaded apps' or 'Installed services'", Toast.LENGTH_LONG).show()
             }
         }
 
