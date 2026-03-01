@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>Add New Device - NannyGodmin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon">
     <style>
         body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; text-align: center; }
         h1 { color: #333; }
@@ -14,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>Add New Device</h1>
+    <h1><img src="{{ url_for('favicon') }}" alt="" style="height:1em;vertical-align:middle;margin-right:6px">Add New Device</h1>
     <p>Scan this QR code with the NannyGodmin app on the Android device to register it.</p>
     <div class="qr-container">
         <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code">

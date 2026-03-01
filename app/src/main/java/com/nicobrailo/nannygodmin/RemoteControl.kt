@@ -1,5 +1,7 @@
 package com.nicobrailo.nannygodmin
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -77,6 +79,7 @@ class RemoteControl(
     }
 
     fun onScreenStateChanged(isScreenOn: Boolean) {
+        // Screen events are always reported regardless of isRunning state
         sendReport(JSONObject().apply {
             put("action", if (isScreenOn) "screen_on" else "screen_off")
         })
@@ -125,8 +128,8 @@ class RemoteControl(
                             handleCommand(commands.getJSONObject(i))
                         }
                     }
-                } else if (responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                    Log.w("RemoteControl", "HTTP 401 unauthorized - Stopping Godmin, triggering provisioning flow.")
+                } else if (responseCode == HttpURLConnection.HTTP_NOT_FOUND || responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                    Log.w("RemoteControl", "Device unprovisioned (HTTP $responseCode). Stopping Godmin tasks.")
                     handler.post { onUnauthorized() }
                 } else {
                     Log.e("RemoteControl", "Server returned unexpected status: $responseCode")
@@ -142,8 +145,22 @@ class RemoteControl(
             isLocked = locked
             if (isLocked) {
                 Log.d("RemoteControl", "Locking device (via server flag)")
+                
+                // 1. First ensure the LockActivity is starting or in front
                 if (!currentActivity.contains("LockActivity")) {
                     startLockActivity()
+                }
+
+                // 2. Then physically turn off the screen
+                val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                val adminName = ComponentName(context, AdminReceiver::class.java)
+                if (dpm.isAdminActive(adminName)) {
+                    try {
+                        Log.i("RemoteControl", "Requesting hardware lock/screen off")
+                        dpm.lockNow()
+                    } catch (e: SecurityException) {
+                        Log.e("RemoteControl", "Failed to lockNow: ${e.message}")
+                    }
                 }
             } else {
                 Log.d("RemoteControl", "Unlocking device (via server flag)")
@@ -185,7 +202,6 @@ class RemoteControl(
                 val connection = createConnection("device_report/screenshot", "image/png", 15000)
 
                 val stream = ByteArrayOutputStream()
-                // PNG compression quality parameter is ignored
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
                 val byteArray = stream.toByteArray()
 

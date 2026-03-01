@@ -233,8 +233,9 @@ class ConfigActivity : AppCompatActivity() {
         val deviceName = Settings.Global.getString(contentResolver, "device_name")
             ?: Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)
             ?: Build.MODEL
+        val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             
-        Log.i(TAG, "Attempting to provision device as: $deviceName at $newUrl")
+        Log.i(TAG, "Attempting to provision device as: $deviceName ($androidId) at $newUrl")
 
         thread {
             try {
@@ -248,6 +249,7 @@ class ConfigActivity : AppCompatActivity() {
                 
                 val body = JSONObject().apply {
                     put("deviceName", deviceName)
+                    put("androidId", androidId)
                 }.toString()
                 
                 connection.outputStream.use { it.write(body.toByteArray()) }

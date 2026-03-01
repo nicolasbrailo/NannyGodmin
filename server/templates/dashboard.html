@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>NannyGodmin Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon">
     <style>
         body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 0 20px; color: #333; }
         h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
@@ -30,7 +31,7 @@
     </style>
 </head>
 <body>
-    <h1>NannyGodmin Dashboard</h1>
+    <h1><img src="{{ url_for('favicon') }}" alt="" style="height:1em;vertical-align:middle;margin-right:6px">NannyGodmin Dashboard</h1>
     <p><a href="{{ url_for('new_device') }}">+ Add New Device</a></p>
 
     {% if relock_at %}
@@ -41,6 +42,9 @@
     (function() {
         var relockAt = new Date("{{ relock_at }}");
         var el = document.getElementById("relock-countdown");
+        var banner = document.getElementById("relock-banner");
+        var initialDiff = Math.floor((relockAt - new Date()) / 1000);
+        if (initialDiff <= 0) { banner.style.display = "none"; return; }
         function update() {
             var diff = Math.max(0, Math.floor((relockAt - new Date()) / 1000));
             var m = Math.floor(diff / 60), s = diff % 60;
@@ -61,6 +65,11 @@
         <form action="{{ url_for('bulk_command') }}" method="post">
             <input type="hidden" name="action" value="unlock_all">
             <button type="submit" class="btn-unlock">Unlock All</button>
+        </form>
+        <form action="{{ url_for('bulk_command') }}" method="post">
+            <input type="hidden" name="action" value="unlock_all_timed">
+            <input type="hidden" name="duration" value="1">
+            <button type="submit" class="btn-timed">Unlock All (1 min)</button>
         </form>
         <form action="{{ url_for('bulk_command') }}" method="post">
             <input type="hidden" name="action" value="unlock_all_timed">

@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 import qrcode
-from flask import Flask, g, jsonify, redirect, render_template, request, url_for
+from flask import Flask, g, jsonify, redirect, render_template, request, send_from_directory, url_for
 
 app = Flask(__name__)
 DATABASE = "nannygodmin.sqlite"
@@ -52,6 +52,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS devices (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
+            android_id TEXT UNIQUE,
             locked INTEGER NOT NULL DEFAULT 0,
             registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -163,10 +164,22 @@ def new_device():
 def provision():
     data = request.get_json()
     device_name = data.get("deviceName", "Unnamed Device")
-    client_id = str(uuid.uuid4())
+    android_id = data.get("androidId")
+    if not android_id:
+        return jsonify({"error": "androidId is required"}), 400
     db = get_db()
+
+    if android_id:
+        existing = db.execute(
+            "SELECT id, locked FROM devices WHERE android_id = ?", (android_id,)
+        ).fetchone()
+        if existing:
+            return jsonify({"clientId": existing["id"], "locked": bool(existing["locked"]), "poll_interval_secs": 5})
+
+    client_id = str(uuid.uuid4())
     db.execute(
-        "INSERT INTO devices (id, name) VALUES (?, ?)", (client_id, device_name)
+        "INSERT INTO devices (id, name, android_id) VALUES (?, ?, ?)",
+        (client_id, device_name, android_id),
     )
     db.commit()
     return jsonify({"clientId": client_id, "locked": False, "poll_interval_secs": 5})
@@ -231,9 +244,13 @@ def device_report_screenshot():
     return jsonify({"ok": True})
 
 
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(app.root_path, "favicon.ico", mimetype="image/x-icon")
+
+
 @app.route("/screenshots/<filename>")
 def serve_screenshot(filename):
-    from flask import send_from_directory
     return send_from_directory(SCREENSHOTS_DIR, filename)
 
 
@@ -328,6 +345,8 @@ def send_command(device_id):
 
 def _relock_devices(device_ids):
     global _relock_timer, _relock_at
+    _relock_timer = None
+    _relock_at = None
     db = sqlite3.connect(DATABASE)
     db.execute("PRAGMA foreign_keys = ON")
     for did in device_ids:
@@ -338,8 +357,6 @@ def _relock_devices(device_ids):
         )
     db.commit()
     db.close()
-    _relock_timer = None
-    _relock_at = None
 
 
 @app.route("/bulk_command", methods=["POST"])

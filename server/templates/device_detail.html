@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>{{ device.name }} - NannyGodmin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon">
     <style>
         body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 0 20px; color: #333; }
         h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
@@ -38,7 +39,7 @@
     <p><a href="{{ url_for('dashboard') }}">&larr; Back to Dashboard</a></p>
 
     <h1>
-        {{ device.name }}
+        <img src="{{ url_for('favicon') }}" alt="" style="height:1em;vertical-align:middle;margin-right:6px">{{ device.name }}
         {% if device.locked %}
         <span class="status-badge status-locked">LOCKED</span>
         {% else %}
