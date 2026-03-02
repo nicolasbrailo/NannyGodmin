@@ -247,6 +247,9 @@ def device_report_screenshot():
 @app.route("/favicon.ico")
 def favicon():
     return send_from_directory(app.root_path, "favicon.ico", mimetype="image/x-icon")
+@app.route("/apk")
+def apk():
+    return send_from_directory(app.root_path, "godmin.apk")
 
 
 @app.route("/screenshots/<filename>")
@@ -407,4 +410,4 @@ def bulk_command():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", debug=True)
+    app.run(host="0.0.0.0", port=4400, debug=True)

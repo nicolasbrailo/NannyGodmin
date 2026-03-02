@@ -32,7 +32,7 @@
 </head>
 <body>
     <h1><img src="{{ url_for('favicon') }}" alt="" style="height:1em;vertical-align:middle;margin-right:6px">NannyGodmin Dashboard</h1>
-    <p><a href="{{ url_for('new_device') }}">+ Add New Device</a></p>
+    <p><a href="{{ url_for('new_device') }}">+ Add New Device</a> | <a href="{{ url_for('apk') }}">Download APK</a></p>
 
     {% if relock_at %}
     <div class="relock-banner" id="relock-banner">
