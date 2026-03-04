@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ device.name }} - Debug - NannyGodmin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <p><a href="{{ url_for('device_detail', device_id=device.id) }}">&larr; Back to {{ device.name }}</a></p>
+
+    <h1>
+        <img src="{{ url_for('favicon') }}" alt="">{{ device.name }} — Debug
+    </h1>
+
+    {% if transitions %}
+    <details>
+        <summary><h2 style="display:inline">State Transitions ({{ transitions|length }})</h2></summary>
+        <table>
+            <tr><th>Time</th><th>Screen</th><th>Server Locked</th><th>Active</th></tr>
+            {% for t in transitions %}
+            <tr>
+                <td>{{ t.timestamp }}</td>
+                <td>{{ "On" if t.screen_on else "Off" }}</td>
+                <td>{{ "Yes" if t.server_locked else "No" }}</td>
+                <td style="color: {{ '#2ecc71' if t.active else '#e74c3c' }}; font-weight: bold;">{{ "Yes" if t.active else "No" }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </details>
+    {% endif %}
+
+    <details>
+        <summary><h2 style="display:inline">Activity History ({{ logs|length }})</h2></summary>
+        {% if logs %}
+        <table>
+            <tr><th>Time</th><th>Action</th><th>Args</th><th>Source</th></tr>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp }}</td>
+                <td>{{ log.action }}</td>
+                <td>{{ log.args or '' }}</td>
+                <td class="source-{{ log.source }}">{{ log.source }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <p><em>No activity yet.</em></p>
+        {% endif %}
+    </details>
+</body>
+</html>

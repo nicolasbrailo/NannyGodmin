@@ -1,0 +1,65 @@
+/* Base */
+body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 0 20px; color: #333; }
+h1 { border-bottom: 2px solid #333; padding-bottom: 8px; }
+h1 img { height: 1em; vertical-align: middle; margin-right: 6px; }
+h2 { margin-top: 30px; }
+a { color: #0066cc; }
+small { font-size: 0.85em; color: #666; }
+code { font-size: 0.85em; color: #999; }
+em { color: #999; font-style: italic; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 0.9em; }
+th { background: #f5f5f5; }
+
+/* Buttons */
+button { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; }
+input[type=range] { vertical-align: middle; }
+.btn-lock { background: #e74c3c; color: #fff; }
+.btn-unlock { background: #2ecc71; color: #fff; }
+.btn-vol { background: #3498db; color: #fff; }
+.btn-screenshot { background: #8e44ad; color: #fff; }
+.btn-timed { background: #f39c12; color: #fff; }
+.btn-danger { background: #999; color: #fff; font-size: 0.85em; }
+.btn-details { background: #555; color: #fff; font-size: 0.85em; }
+
+/* Status badges */
+mark { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; font-weight: bold; color: #fff; line-height: 1.6; vertical-align: middle; margin-left: 8px; }
+mark.locked { background: #e74c3c; }
+mark.unlocked { background: #2ecc71; }
+
+/* Flex control bars */
+nav { margin: 20px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+nav form { display: inline; }
+
+/* Dashboard: device cards */
+.device-row { display: flex; align-items: center; gap: 10px; padding: 12px 15px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.device-row strong { min-width: 120px; }
+.device-row nav { flex: 1; margin: 0; gap: 6px; }
+
+/* Dashboard: relock banner */
+.relock-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; font-weight: bold; }
+
+/* Detail: screenshot */
+section img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+
+/* Detail: usage heatmap slots */
+.slot-bar { display: flex; height: 16px; min-width: 288px; }
+.slot-bar span { flex: 1; }
+.slot-active { background: #2ecc71; }
+.slot-inactive { background: #eee; }
+.slot-bar .slot-active + .slot-active { border-left: 1px solid #27ae60; }
+.slot-header { display: flex; justify-content: space-between; font-size: 0.75em; color: #999; min-width: 288px; }
+
+/* Detail: day separator in app timeline */
+.day-separator td { border-bottom: 2px solid #333; height: 4px; padding: 0; }
+
+/* Debug: log source colors */
+.source-device { color: #2980b9; }
+.source-controller { color: #8e44ad; }
+
+/* New device: centered layout */
+.page-centered { text-align: center; max-width: 600px; }
+figure { margin: 30px 0; }
+figure img { border: 8px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
