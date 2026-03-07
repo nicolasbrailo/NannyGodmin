@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import db
 import device_timeline
+import usage_tracking
 
 
 class ValidationError(Exception):
@@ -16,6 +17,10 @@ class DeviceNotFound(Exception):
 
 _relock_timer = None
 _relock_at = None
+
+
+def configure_alerts(config):
+    usage_tracking.configure(config)
 
 
 def get_relock_at():
@@ -33,9 +38,13 @@ def process_report(conn, client_id, action, extra_args):
     if action and action != "poll":
         db.insert_action_log(conn, client_id, action, extra_args if extra_args else None, "device")
 
+    lock_override = usage_tracking.check_usage(conn, client_id, device["name"], action)
+
     commands = db.get_and_clear_pending_commands(conn, client_id)
     conn.commit()
-    return {"commands": commands, "locked": bool(device["locked"])}
+
+    locked = lock_override if lock_override is not None else bool(device["locked"])
+    return {"commands": commands, "locked": locked}
 
 
 def save_screenshot(screenshots_dir, client_id, data):
@@ -53,6 +62,7 @@ def save_screenshot(screenshots_dir, client_id, data):
 def send_command(conn, device_id, action, value):
     if action in ("lock", "unlock"):
         db.set_device_locked(conn, device_id, action == "lock")
+        usage_tracking.update_lock(device_id, action == "lock")
     else:
         cmd = {"name": action}
         if action == "set_volume":
@@ -88,10 +98,12 @@ def bulk_command(conn, action, duration_mins=None):
         for d in devices:
             db.set_device_locked(conn, d["id"], True)
             db.insert_action_log(conn, d["id"], "lock", None, "controller")
+            usage_tracking.update_lock(d["id"], True)
     elif action == "unlock_all":
         for d in devices:
             db.set_device_locked(conn, d["id"], False)
             db.insert_action_log(conn, d["id"], "unlock", None, "controller")
+            usage_tracking.update_lock(d["id"], False)
     elif action == "unlock_all_timed":
         if duration_mins is None:
             duration_mins = 30
@@ -99,6 +111,7 @@ def bulk_command(conn, action, duration_mins=None):
         for d in devices:
             db.set_device_locked(conn, d["id"], False)
             db.insert_action_log(conn, d["id"], "unlock", None, "controller")
+            usage_tracking.update_lock(d["id"], False)
         if snapshot:
             _relock_at = datetime.now(timezone.utc) + timedelta(minutes=duration_mins)
             _relock_timer = threading.Timer(duration_mins * 60, _relock_devices, args=[snapshot])

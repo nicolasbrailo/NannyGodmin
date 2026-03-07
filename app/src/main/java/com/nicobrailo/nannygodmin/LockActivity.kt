@@ -9,8 +9,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.util.Log
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.WindowManager
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -48,12 +51,30 @@ class LockActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         )
 
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(android.graphics.Color.BLACK)
+        }
+
+        val iconView = ImageView(this).apply {
+            setImageResource(R.mipmap.ic_launcher)
+            val size = (128 * resources.displayMetrics.density).toInt()
+            layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                setMargins(0, 0, 0, (32 * resources.displayMetrics.density).toInt())
+            }
+        }
+
         val textView = TextView(this).apply {
             text = getString(R.string.device_locked)
             textSize = 32f
-            gravity = android.view.Gravity.CENTER
+            setTextColor(android.graphics.Color.WHITE)
+            gravity = Gravity.CENTER
         }
-        setContentView(textView)
+
+        layout.addView(iconView)
+        layout.addView(textView)
+        setContentView(layout)
 
         // Modern way to handle/disable back button
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {

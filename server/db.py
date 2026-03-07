@@ -110,6 +110,16 @@ def get_app_and_screen_events(db, device_id):
     ).fetchall()
 
 
+def get_current_screen_state(db, device_id):
+    row = db.execute(
+        "SELECT action FROM action_log "
+        "WHERE device_id = ? AND action IN ('screen_on', 'screen_off') "
+        "ORDER BY timestamp DESC LIMIT 1",
+        (device_id,),
+    ).fetchone()
+    return row["action"] == "screen_on" if row else False
+
+
 def clear_action_log(db, device_id):
     db.execute("DELETE FROM action_log WHERE device_id = ?", (device_id,))
     db.commit()

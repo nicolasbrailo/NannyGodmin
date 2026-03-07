@@ -24,6 +24,10 @@ def close_db(exc):
 
 SCREENSHOTS_DIR = "screenshots"
 PROVISION_CONFIG = {"poll_interval_secs": 5}
+ALERT_CONFIG = {
+    "daily_limit_mins": 120,  # None to disable
+    "auto_lock": False,
+}
 
 
 @app.route("/")
@@ -173,4 +177,5 @@ def bulk_command():
 
 if __name__ == "__main__":
     db.init()
+    device.configure_alerts(ALERT_CONFIG)
     app.run(host="0.0.0.0", port=4400, debug=True)

@@ -1,4 +1,4 @@
-- Create config page to set up polling interval (other configs?)
+- Create config page to set up polling interval, fail open/closed (other configs?)
 - Can the app auto update?
 - Explore owner mode instead of admin mode
 - Create alarms (eg trigger event when usage above X, or when app is above usage threshold, or..)
@@ -6,3 +6,4 @@
 - Explore websocket instead of polling
 - Move to https
 - Use device attestation for enrollment
+- Do a countdown to notify before locking

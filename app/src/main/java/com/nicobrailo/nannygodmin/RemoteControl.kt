@@ -187,13 +187,8 @@ class RemoteControl(
     }
 
     private fun takeAndSendScreenshot() {
-        NannyAccessibilityService.takeScreenshot(ContextCompat.getMainExecutor(context)) { bitmap ->
-            if (bitmap != null) {
-                uploadScreenshot(bitmap)
-            } else {
-                Log.e("RemoteControl", "Failed to take screenshot")
-            }
-        }
+        // Screenshots are currently disabled as AccessibilityService was removed.
+        Log.w("RemoteControl", "Screenshot requested but AccessibilityService is removed.")
     }
 
     private fun uploadScreenshot(bitmap: Bitmap) {

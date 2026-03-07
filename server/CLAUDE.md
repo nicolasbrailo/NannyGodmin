@@ -18,8 +18,9 @@ Flask app with Jinja2 templates and SQLite (`nannygodmin.sqlite`). No ORM — ra
 
 - `app.py` — Flask routes, request/response handling, Flask `g` pattern for DB connection lifecycle. Thin layer that delegates to `device` and `enroll` modules, mapping their exceptions to HTTP status codes.
 - `db.py` — Persistence layer. Pure sqlite3, no Flask dependency. Free functions that take a `db` connection as first argument. Covers schema init, and CRUD for devices, action_log, and pending_commands.
-- `device.py` — Device lifecycle logic after enrollment: reports, commands (single + bulk), screenshots, device detail aggregation. No Flask dependency. Owns the relock timer state. Raises `device.ValidationError` (→ 400) and `device.DeviceNotFound` (→ 401 for API, 404 for HTML).
+- `device.py` — Device lifecycle logic after enrollment: reports, commands (single + bulk), screenshots, device detail aggregation. No Flask dependency. Owns the relock timer state. Delegates to `usage_tracking` for alert/threshold logic. Raises `device.ValidationError` (→ 400) and `device.DeviceNotFound` (→ 401 for API, 404 for HTML).
 - `device_timeline.py` — Timeline computation utilities. No Flask dependency. `compute_usage_timeline` (screen on/off + lock transitions → daily hours), `compute_daily_slots` (15-min activity heatmap per day), `compute_app_timeline` (foreground app usage with short-transition collapsing).
+- `usage_tracking.py` — Incremental usage tracking and alert system. No Flask dependency. Keeps per-device running state (`accumulated_secs`, `active_since`) seeded once from the timeline on first access, then updated in O(1) per report. Checks usage against a configurable daily threshold (`daily_limit_mins`); prints an alert and optionally auto-locks the device (`auto_lock`). Resets accumulated usage and auto-lock state at midnight (lazily on next report). Only imported by `device.py`; configured via `device.configure_alerts()` from `app.py`.
 - `enroll.py` — Device enrollment logic (QR code generation, provisioning). No Flask dependency. Raises `enroll.ValidationError` for invalid input; `app.py` maps these to HTTP 400.
 
 ### API Endpoints
@@ -49,6 +50,7 @@ Flask app with Jinja2 templates and SQLite (`nannygodmin.sqlite`). No ORM — ra
 - **Command deduplication**: when queueing a command, previous pending commands in the same override group are replaced. Groups: `{set_volume}`, `{lock, unlock}`.
 - **Device report**: `action` is optional — a device can call `/device_report` with just `{clientId}` to poll for commands without reporting anything.
 - **app_change events**: the Android accessibility service reports `app_change` with `new_activity` set to a package/activity string. `"Unknown"` does NOT mean the screen is off — it's noise from the accessibility service losing track of the foreground app during transitions. The real app keeps running. Use `screen_off`/`screen_on` events for actual screen state. See `device_timeline.compute_app_timeline` for the full heuristic (5 phases: raw spans, contiguous merge, drop short, re-merge, gap merge for same-app spans <5 min apart).
+- **Usage alerts**: `ALERT_CONFIG` in `app.py` sets `daily_limit_mins` (threshold in minutes, `None` to disable) and `auto_lock` (bool). When a device's accumulated screen-on time crosses the threshold, an alert is printed to stdout. If `auto_lock` is enabled, the device is locked and marked `auto_locked`; at midnight the lock and threshold are reset lazily on the next device report.
 - **QR code**: encodes `nannygodmin://config?url=http://<lan-ip>:<port>/`; port is read from the incoming request, not hardcoded.
 
 ## Dependencies

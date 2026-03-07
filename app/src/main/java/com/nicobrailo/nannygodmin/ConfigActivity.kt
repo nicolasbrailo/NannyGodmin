@@ -1,5 +1,6 @@
 package com.nicobrailo.nannygodmin
 
+import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
@@ -63,6 +64,7 @@ class ConfigActivity : AppCompatActivity() {
     private lateinit var urlInput: EditText
     private lateinit var btnSaveUrl: Button
     private lateinit var btnUnprovision: Button
+    private lateinit var permissionContainer: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -112,7 +114,11 @@ class ConfigActivity : AppCompatActivity() {
             }
         }
 
-        setupPermissionButtons(layout)
+        permissionContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        layout.addView(permissionContainer)
         layout.addView(statusWarning)
         layout.addView(urlStatus)
         layout.addView(clientIdStatus)
@@ -153,16 +159,22 @@ class ConfigActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupPermissionButtons(layout: LinearLayout) {
+    override fun onResume() {
+        super.onResume()
+        refreshPermissionButtons()
+    }
+
+    private fun refreshPermissionButtons() {
+        permissionContainer.removeAllViews()
+
         val dpm = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val adminName = ComponentName(this, AdminReceiver::class.java)
 
-        val btnEnableAdmin = Button(this).apply {
-            text = getString(R.string.enable_device_admin)
-            setOnClickListener {
-                if (dpm.isAdminActive(adminName)) {
-                    Toast.makeText(this@ConfigActivity, R.string.admin_already_active, Toast.LENGTH_SHORT).show()
-                } else {
+        // Device Admin
+        if (!dpm.isAdminActive(adminName)) {
+            val btnEnableAdmin = Button(this).apply {
+                text = getString(R.string.enable_device_admin)
+                setOnClickListener {
                     val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
                         putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminName)
                         putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, getString(R.string.admin_explanation))
@@ -170,38 +182,43 @@ class ConfigActivity : AppCompatActivity() {
                     startActivity(intent)
                 }
             }
+            permissionContainer.addView(btnEnableAdmin)
         }
 
-        val btnUsageStats = Button(this).apply {
-            text = getString(R.string.enable_usage_stats)
-            setOnClickListener {
-                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        // Usage Stats
+        if (!isUsageStatsPermissionGranted()) {
+            val btnUsageStats = Button(this).apply {
+                text = getString(R.string.enable_usage_stats)
+                setOnClickListener {
+                    startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                }
             }
+            permissionContainer.addView(btnUsageStats)
         }
 
-        val btnOverlay = Button(this).apply {
-            text = getString(R.string.enable_overlay_permission)
-            setOnClickListener {
-                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    "package:$packageName".toUri())
-                startActivity(intent)
+        // Overlay Permission
+        if (!Settings.canDrawOverlays(this)) {
+            val btnOverlay = Button(this).apply {
+                text = getString(R.string.enable_overlay_permission)
+                setOnClickListener {
+                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        "package:$packageName".toUri())
+                    startActivity(intent)
+                }
             }
+            permissionContainer.addView(btnOverlay)
         }
+    }
 
-        val btnAccessibility = Button(this).apply {
-            text = getString(R.string.enable_accessibility_service)
-            setOnClickListener {
-                // Simplified: Just open the accessibility menu.
-                // Tell user to look for NannyGodmin in Downloaded/Installed Apps.
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                Toast.makeText(this@ConfigActivity, "Look for NannyGodmin under 'Downloaded apps' or 'Installed services'", Toast.LENGTH_LONG).show()
-            }
+    private fun isUsageStatsPermissionGranted(): Boolean {
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
         }
-
-        layout.addView(btnEnableAdmin)
-        layout.addView(btnUsageStats)
-        layout.addView(btnOverlay)
-        layout.addView(btnAccessibility)
+        return mode == AppOpsManager.MODE_ALLOWED
     }
 
     private fun updateUI(url: String, clientId: String) {
