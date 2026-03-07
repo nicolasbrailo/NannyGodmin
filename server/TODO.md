@@ -1,4 +1,4 @@
-- Create config page to set up polling interval, fail open/closed (other configs?)
+- When the provision config is changed, push it to the device
 - Can the app auto update?
 - Explore owner mode instead of admin mode
 - Create alarms (eg trigger event when usage above X, or when app is above usage threshold, or..)

@@ -23,11 +23,29 @@ def close_db(exc):
         conn.close()
 
 SCREENSHOTS_DIR = "screenshots"
-PROVISION_CONFIG = {"poll_interval_secs": 5}
-ALERT_CONFIG = {
-    "daily_limit_mins": 120,  # None to disable
+CONFIG_DEFAULTS = {
+    "poll_interval_secs": 5,
+    "daily_limit_mins": 120,
     "auto_lock": False,
 }
+
+
+def _load_config():
+    """Load config from DB, falling back to defaults for missing keys."""
+    conn = db.connect()
+    saved = db.get_config(conn)
+    conn.close()
+    config = dict(CONFIG_DEFAULTS)
+    config.update(saved)
+    return config
+
+
+def _provision_config(config):
+    return {"poll_interval_secs": config["poll_interval_secs"]}
+
+
+def _alert_config(config):
+    return {"daily_limit_mins": config["daily_limit_mins"], "auto_lock": config["auto_lock"]}
 
 
 @app.route("/")
@@ -50,7 +68,7 @@ def new_device():
 def provision():
     data = request.get_json()
     try:
-        result = enroll.provision(get_db(), data.get("deviceName", "Unnamed Device"), data.get("androidId"), PROVISION_CONFIG)
+        result = enroll.provision(get_db(), data.get("deviceName", "Unnamed Device"), data.get("androidId"), _provision_config(_load_config()))
     except enroll.ValidationError as e:
         return jsonify({"error": str(e)}), 400
     return jsonify(result)
@@ -182,7 +200,32 @@ def bulk_command():
     return redirect(url_for("dashboard"))
 
 
+@app.route("/config")
+def config_page():
+    config = _load_config()
+    return render_template("config.html", config=config)
+
+
+@app.route("/config", methods=["POST"])
+def config_save():
+    conn = get_db()
+    poll = request.form.get("poll_interval_secs")
+    if poll is not None:
+        db.set_config(conn, "poll_interval_secs", int(poll))
+
+    limit = request.form.get("daily_limit_mins")
+    if limit is not None:
+        db.set_config(conn, "daily_limit_mins", int(limit) if limit != "" else None)
+
+    auto_lock = request.form.get("auto_lock")
+    db.set_config(conn, "auto_lock", auto_lock == "on")
+
+    device.configure_alerts(_alert_config(_load_config()))
+    return redirect(url_for("config_page"))
+
+
 if __name__ == "__main__":
     db.init()
-    device.configure_alerts(ALERT_CONFIG)
+    config = _load_config()
+    device.configure_alerts(_alert_config(config))
     app.run(host="0.0.0.0", port=4400, debug=True)

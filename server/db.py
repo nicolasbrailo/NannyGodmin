@@ -35,6 +35,10 @@ def init(database=DATABASE):
             device_id TEXT NOT NULL REFERENCES devices(id),
             command TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
     """)
     # Migrations
     cols = [r[1] for r in db.execute("PRAGMA table_info(devices)").fetchall()]
@@ -148,6 +152,22 @@ def get_and_clear_pending_commands(db, device_id):
     if rows:
         db.execute("DELETE FROM pending_commands WHERE device_id = ?", (device_id,))
     return commands
+
+
+# --- Config ---
+
+def get_config(db):
+    rows = db.execute("SELECT key, value FROM config").fetchall()
+    return {row["key"]: json.loads(row["value"]) for row in rows}
+
+
+def set_config(db, key, value):
+    db.execute(
+        "INSERT INTO config (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, json.dumps(value)),
+    )
+    db.commit()
 
 
 def replace_pending_command(db, device_id, action_name, command):
