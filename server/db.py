@@ -17,6 +17,7 @@ def init(database=DATABASE):
         CREATE TABLE IF NOT EXISTS devices (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
+            alias TEXT,
             android_id TEXT UNIQUE,
             locked INTEGER NOT NULL DEFAULT 0,
             registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -35,6 +36,10 @@ def init(database=DATABASE):
             command TEXT NOT NULL
         );
     """)
+    # Migrations
+    cols = [r[1] for r in db.execute("PRAGMA table_info(devices)").fetchall()]
+    if "alias" not in cols:
+        db.execute("ALTER TABLE devices ADD COLUMN alias TEXT")
     db.close()
 
 
@@ -58,6 +63,14 @@ def insert_device(db, device_id, name, android_id):
     db.execute(
         "INSERT INTO devices (id, name, android_id) VALUES (?, ?, ?)",
         (device_id, name, android_id),
+    )
+    db.commit()
+
+
+def set_device_alias(db, device_id, alias):
+    db.execute(
+        "UPDATE devices SET alias = ? WHERE id = ?",
+        (alias or None, device_id),
     )
     db.commit()
 

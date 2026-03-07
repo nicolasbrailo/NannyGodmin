@@ -146,6 +146,13 @@ def device_debug(device_id):
     )
 
 
+@app.route("/device/<device_id>/alias", methods=["POST"])
+def set_alias(device_id):
+    alias = request.form.get("alias", "").strip()
+    db.set_device_alias(get_db(), device_id, alias)
+    return redirect(url_for("device_detail", device_id=device_id))
+
+
 @app.route("/device/<device_id>/clear_history", methods=["POST"])
 def clear_history(device_id):
     db.clear_action_log(get_db(), device_id)

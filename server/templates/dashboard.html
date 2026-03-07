@@ -45,11 +45,6 @@
         </form>
         <form action="{{ url_for('bulk_command') }}" method="post">
             <input type="hidden" name="action" value="unlock_all_timed">
-            <input type="hidden" name="duration" value="1">
-            <button type="submit" class="btn-timed">Unlock All (1 min)</button>
-        </form>
-        <form action="{{ url_for('bulk_command') }}" method="post">
-            <input type="hidden" name="action" value="unlock_all_timed">
             <input type="hidden" name="duration" value="30">
             <button type="submit" class="btn-timed">Unlock All (30 min)</button>
         </form>
@@ -63,7 +58,7 @@
     {% if devices %}
     {% for device in devices %}
     <div class="device-row">
-        <strong>{{ device.name }}</strong>
+        <strong>{{ device.alias or device.name }}</strong>
         {% if device.locked %}
         <mark class="locked">LOCKED</mark>
         {% else %}

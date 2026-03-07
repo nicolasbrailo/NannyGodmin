@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>{{ device.name }} - NannyGodmin</title>
+    <title>{{ device.alias or device.name }} - NannyGodmin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -11,15 +11,20 @@
     <p><a href="{{ url_for('dashboard') }}">&larr; Back to Dashboard</a></p>
 
     <h1>
-        <img src="{{ url_for('favicon') }}" alt="">{{ device.name }}
+        <img src="{{ url_for('favicon') }}" alt="">{{ device.alias or device.name }}
         {% if device.locked %}
         <mark class="locked">LOCKED</mark>
         {% else %}
         <mark class="unlocked">UNLOCKED</mark>
         {% endif %}
     </h1>
+    <div><small>Device name: {{ device.name }}</small></div>
     <code>{{ device.id }}</code>
     <div><small>Registered: {{ device.registered_at }}</small></div>
+    <form action="{{ url_for('set_alias', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+        <input type="text" name="alias" value="{{ device.alias or '' }}" placeholder="Set alias...">
+        <button type="submit" class="btn-details">Save Alias</button>
+    </form>
 
     <nav>
         {% if device.locked %}
