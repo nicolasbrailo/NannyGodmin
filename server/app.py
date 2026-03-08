@@ -247,6 +247,17 @@ def config_save():
     return redirect(url_for("config_page"))
 
 
+@app.route("/config/telegram_test", methods=["POST"])
+def telegram_test():
+    import usage_tracking
+    if usage_tracking._telegram_bot and _load_config().get("telegram_chat_id"):
+        try:
+            usage_tracking._telegram_bot.send_message(int(_load_config()["telegram_chat_id"]), "Hi")
+        except Exception:
+            pass
+    return redirect(url_for("config_page"))
+
+
 if __name__ == "__main__":
     db.init()
     config = _load_config()
