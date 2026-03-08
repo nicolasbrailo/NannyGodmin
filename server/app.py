@@ -28,6 +28,8 @@ CONFIG_DEFAULTS = {
     "auto_lock": False,
     "warning_enabled": False,
     "warning_mins": 5,
+    "telegram_bot_token": None,
+    "telegram_chat_id": None,
 }
 
 
@@ -51,6 +53,8 @@ def _alert_config(config):
         "auto_lock": config["auto_lock"],
         "warning_enabled": config["warning_enabled"],
         "warning_mins": config["warning_mins"],
+        "telegram_bot_token": config["telegram_bot_token"],
+        "telegram_chat_id": config["telegram_chat_id"],
     }
 
 
@@ -232,6 +236,12 @@ def config_save():
     warning_mins = request.form.get("warning_mins")
     if warning_mins is not None:
         db.set_config(conn, "warning_mins", int(warning_mins))
+
+    telegram_bot_token = request.form.get("telegram_bot_token", "").strip()
+    db.set_config(conn, "telegram_bot_token", telegram_bot_token or None)
+
+    telegram_chat_id = request.form.get("telegram_chat_id", "").strip()
+    db.set_config(conn, "telegram_chat_id", telegram_chat_id or None)
 
     device.configure_alerts(_alert_config(_load_config()))
     return redirect(url_for("config_page"))

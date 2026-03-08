@@ -36,6 +36,16 @@
             <input type="number" name="warning_mins" value="{{ config.warning_mins }}" min="1">
         </label>
 
+        <h2>Telegram Notifications</h2>
+        <label>
+            Bot token
+            <input type="text" name="telegram_bot_token" value="{{ config.telegram_bot_token or '' }}" placeholder="123456:ABC-DEF...">
+        </label>
+        <label>
+            Chat ID
+            <input type="text" name="telegram_chat_id" value="{{ config.telegram_chat_id or '' }}" placeholder="e.g. 123456789">
+        </label>
+
         <div style="margin-top:16px">
             <button type="submit" class="btn-details">Save</button>
         </div>

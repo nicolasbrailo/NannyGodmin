@@ -1,0 +1,3 @@
+[submodule "server/PyTelegramBot"]
+	path = server/PyTelegramBot
+	url = https://github.com/nicolasbrailo/PyTelegramBot

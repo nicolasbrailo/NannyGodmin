@@ -1,24 +1,47 @@
+import logging
+import sys
 from datetime import datetime
 
 import db
 import device_timeline
+
+sys.path.insert(0, "PyTelegramBot")
+from pytelegrambot import TelegramBot
+
+log = logging.getLogger(__name__)
 
 _alert_config = {
     "daily_limit_mins": None,  # None = disabled
     "auto_lock": False,
     "warning_enabled": False,
     "warning_mins": 5,
+    "telegram_bot_token": None,
+    "telegram_chat_id": None,
 }
+
+_telegram_bot = None
 
 _usage_trackers = {}  # device_id -> tracker dict
 
 
 def configure(config):
-    global _alert_config
+    global _alert_config, _telegram_bot
     _alert_config = config
     for tracker in _usage_trackers.values():
         tracker["triggered"] = False
         tracker["warned"] = False
+
+    token = config.get("telegram_bot_token")
+    chat_id = config.get("telegram_chat_id")
+    if token and chat_id:
+        try:
+            _telegram_bot = TelegramBot(token, [int(chat_id)])
+            log.info("Telegram bot connected")
+        except Exception:
+            log.warning("Failed to connect Telegram bot", exc_info=True)
+            _telegram_bot = None
+    else:
+        _telegram_bot = None
 
 
 def reset_triggered(device_id):
@@ -61,9 +84,17 @@ def _get_tracker(conn, device_id):
 
 def _notify_threshold(device_id, device_name, usage_mins, threshold_mins):
     """Notify that a device has exceeded its daily usage threshold."""
-    print(f"[ALERT] {datetime.now().strftime('%H:%M:%S')} — "
-          f"Device '{device_name}' ({device_id[:8]}...) reached "
-          f"{usage_mins:.0f}min usage (threshold: {threshold_mins}min)")
+    msg = (f"Device '{device_name}' ({device_id[:8]}...) reached "
+           f"{usage_mins:.0f}min usage (threshold: {threshold_mins}min)")
+    print(f"[ALERT] {datetime.now().strftime('%H:%M:%S')} — {msg}")
+
+    if _telegram_bot:
+        chat_id = _alert_config.get("telegram_chat_id")
+        if chat_id:
+            try:
+                _telegram_bot.send_message(int(chat_id), f"⚠️ {msg}")
+            except Exception:
+                log.warning("Failed to send Telegram alert", exc_info=True)
 
 
 def _get_threshold(conn, device_id):
