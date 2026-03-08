@@ -25,6 +25,14 @@
         <input type="text" name="alias" value="{{ device.alias or '' }}" placeholder="Set alias...">
         <button type="submit" class="btn-details">Save Alias</button>
     </form>
+    <form action="{{ url_for('set_daily_limit', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+        <label>Daily limit (mins):</label>
+        <input type="number" name="daily_limit_mins" value="{{ device.daily_limit_mins if device.daily_limit_mins is not none else '' }}" placeholder="{{ global_daily_limit_mins if global_daily_limit_mins is not none else 'No limit' }}" min="1" style="width:100px">
+        <button type="submit" class="btn-details">Save</button>
+        {% if device.daily_limit_mins is not none %}
+        <small>(overrides global: {{ global_daily_limit_mins if global_daily_limit_mins is not none else 'disabled' }})</small>
+        {% endif %}
+    </form>
 
     <nav>
         {% if device.locked %}

@@ -23,6 +23,29 @@ def configure_alerts(config):
     usage_tracking.configure(config)
 
 
+def get_all_devices_with_usage(conn):
+    devices = db.get_all_devices(conn)
+    usage_today = {d["id"]: device_timeline.get_today_usage(conn, d["id"]) for d in devices}
+    return devices, usage_today
+
+
+def set_device_alias(conn, device_id, alias):
+    db.set_device_alias(conn, device_id, alias)
+
+
+def set_device_daily_limit(conn, device_id, daily_limit_mins):
+    db.set_device_daily_limit(conn, device_id, daily_limit_mins)
+    usage_tracking.reset_triggered(device_id)
+
+
+def clear_history(conn, device_id):
+    db.clear_action_log(conn, device_id)
+
+
+def remove_device(conn, device_id):
+    db.remove_device(conn, device_id)
+
+
 def get_relock_at():
     return _relock_at
 
@@ -47,11 +70,13 @@ def process_report(conn, client_id, action, extra_args):
     return {"commands": commands, "locked": locked}
 
 
-def save_screenshot(screenshots_dir, client_id, data):
+def save_screenshot(conn, screenshots_dir, client_id, data):
     if not client_id:
         raise ValidationError("X-Client-Id header is required")
     if not data:
         raise ValidationError("empty body")
+    if not db.get_device(conn, client_id):
+        raise DeviceNotFound("unknown device")
 
     os.makedirs(screenshots_dir, exist_ok=True)
     path = os.path.join(screenshots_dir, f"{client_id}_screenshot.png")

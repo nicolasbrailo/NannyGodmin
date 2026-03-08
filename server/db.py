@@ -20,6 +20,7 @@ def init(database=DATABASE):
             alias TEXT,
             android_id TEXT UNIQUE,
             locked INTEGER NOT NULL DEFAULT 0,
+            daily_limit_mins INTEGER,
             registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS action_log (
@@ -44,6 +45,8 @@ def init(database=DATABASE):
     cols = [r[1] for r in db.execute("PRAGMA table_info(devices)").fetchall()]
     if "alias" not in cols:
         db.execute("ALTER TABLE devices ADD COLUMN alias TEXT")
+    if "daily_limit_mins" not in cols:
+        db.execute("ALTER TABLE devices ADD COLUMN daily_limit_mins INTEGER")
     db.close()
 
 
@@ -75,6 +78,14 @@ def set_device_alias(db, device_id, alias):
     db.execute(
         "UPDATE devices SET alias = ? WHERE id = ?",
         (alias or None, device_id),
+    )
+    db.commit()
+
+
+def set_device_daily_limit(db, device_id, daily_limit_mins):
+    db.execute(
+        "UPDATE devices SET daily_limit_mins = ? WHERE id = ?",
+        (daily_limit_mins, device_id),
     )
     db.commit()
 

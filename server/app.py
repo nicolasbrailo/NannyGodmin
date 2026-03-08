@@ -4,7 +4,6 @@ from flask import Flask, g, jsonify, redirect, render_template, request, send_fr
 
 import db
 import device
-import device_timeline
 import enroll
 
 app = Flask(__name__)
@@ -50,9 +49,7 @@ def _alert_config(config):
 
 @app.route("/")
 def dashboard():
-    conn = get_db()
-    devices = db.get_all_devices(conn)
-    usage_today = {d["id"]: device_timeline.get_today_usage(conn, d["id"]) for d in devices}
+    devices, usage_today = device.get_all_devices_with_usage(get_db())
     relock_at = device.get_relock_at()
     relock_at = relock_at.isoformat() if relock_at else None
     return render_template("dashboard.html", devices=devices, usage_today=usage_today, relock_at=relock_at)
@@ -96,15 +93,8 @@ def device_report_screenshot():
     client_id = request.headers.get("X-Client-Id")
     data = request.get_data()
 
-    conn = get_db()
-    dev = db.get_device(conn, client_id) if client_id else None
-
     try:
-        if not dev:
-            if not client_id:
-                raise device.ValidationError("X-Client-Id header is required")
-            raise device.DeviceNotFound("unknown device")
-        device.save_screenshot(SCREENSHOTS_DIR, client_id, data)
+        device.save_screenshot(get_db(), SCREENSHOTS_DIR, client_id, data)
     except device.ValidationError as e:
         return jsonify({"error": str(e)}), 400
     except device.DeviceNotFound as e:
@@ -137,6 +127,7 @@ def device_detail(device_id):
     if detail["screenshot_filename"]:
         screenshot_url = url_for("serve_screenshot", filename=detail["screenshot_filename"])
 
+    config = _load_config()
     return render_template(
         "device_detail.html",
         device=detail["device"],
@@ -146,6 +137,7 @@ def device_detail(device_id):
         daily_slots=detail["daily_slots"],
         slot_hours=detail["slot_hours"],
         app_timeline=detail["app_timeline"],
+        global_daily_limit_mins=config["daily_limit_mins"],
     )
 
 
@@ -164,22 +156,29 @@ def device_debug(device_id):
     )
 
 
+@app.route("/device/<device_id>/daily_limit", methods=["POST"])
+def set_daily_limit(device_id):
+    limit = request.form.get("daily_limit_mins", "").strip()
+    device.set_device_daily_limit(get_db(), device_id, int(limit) if limit else None)
+    return redirect(url_for("device_detail", device_id=device_id))
+
+
 @app.route("/device/<device_id>/alias", methods=["POST"])
 def set_alias(device_id):
     alias = request.form.get("alias", "").strip()
-    db.set_device_alias(get_db(), device_id, alias)
+    device.set_device_alias(get_db(), device_id, alias)
     return redirect(url_for("device_detail", device_id=device_id))
 
 
 @app.route("/device/<device_id>/clear_history", methods=["POST"])
 def clear_history(device_id):
-    db.clear_action_log(get_db(), device_id)
+    device.clear_history(get_db(), device_id)
     return redirect(url_for("device_detail", device_id=device_id))
 
 
 @app.route("/device/<device_id>/remove", methods=["POST"])
 def remove_device(device_id):
-    db.remove_device(get_db(), device_id)
+    device.remove_device(get_db(), device_id)
     return redirect(url_for("dashboard"))
 
 

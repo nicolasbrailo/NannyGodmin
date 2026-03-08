@@ -16,6 +16,12 @@ def configure(config):
     _alert_config = config
 
 
+def reset_triggered(device_id):
+    tracker = _usage_trackers.get(device_id)
+    if tracker:
+        tracker["triggered"] = False
+
+
 def _seed_tracker(conn, device_id):
     """Build tracker state from existing data (one-time cost per device after restart)."""
     today = datetime.now().strftime("%Y-%m-%d")
@@ -53,9 +59,17 @@ def _notify_threshold(device_id, device_name, usage_mins, threshold_mins):
           f"{usage_mins:.0f}min usage (threshold: {threshold_mins}min)")
 
 
+def _get_threshold(conn, device_id):
+    """Return the effective threshold for a device (per-device override or global)."""
+    dev = db.get_device(conn, device_id)
+    if dev["daily_limit_mins"] is not None:
+        return dev["daily_limit_mins"]
+    return _alert_config.get("daily_limit_mins")
+
+
 def check_usage(conn, device_id, device_name, action):
     """Update usage tracker and check threshold. Called on every device report."""
-    threshold = _alert_config.get("daily_limit_mins")
+    threshold = _get_threshold(conn, device_id)
     if threshold is None:
         return None
 
@@ -126,6 +140,9 @@ def update_lock(device_id, locked):
     tracker = _usage_trackers.get(device_id)
     if not tracker:
         return
+
+    if not locked:
+        tracker["auto_locked"] = False
 
     now = datetime.now()
     tracker["server_locked"] = locked
