@@ -1,9 +1,7 @@
 - When the provision config is changed, push it to the device
 - Can the app auto update?
 - Explore owner mode instead of admin mode
-- Create alarms (eg trigger event when usage above X, or when app is above usage threshold, or..)
 - Integrate with Telegram?
 - Explore websocket instead of polling
 - Move to https
 - Use device attestation for enrollment
-- Do a countdown to notify before locking

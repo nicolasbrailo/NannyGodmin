@@ -16,6 +16,9 @@ _usage_trackers = {}  # device_id -> tracker dict
 def configure(config):
     global _alert_config
     _alert_config = config
+    for tracker in _usage_trackers.values():
+        tracker["triggered"] = False
+        tracker["warned"] = False
 
 
 def reset_triggered(device_id):
@@ -129,7 +132,8 @@ def check_usage(conn, device_id, device_name, action):
     if (_alert_config.get("warning_enabled")
             and not tracker["warned"]
             and warning_at > 0
-            and current_mins >= warning_at):
+            and current_mins >= warning_at
+            and current_mins < threshold):
         tracker["warned"] = True
         remaining = max(1, round(threshold - current_mins))
         cmd = {"name": "show_notification", "msg": f"{remaining} minutes before shutdown", "timeout": 10}

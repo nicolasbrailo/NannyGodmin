@@ -173,6 +173,7 @@ class RemoteControl(
     }
 
     private fun handleCommand(command: JSONObject) {
+        Log.d("RemoteControl", "Received command: $command")
         when (val name = command.optString("name")) {
             "set_volume" -> {
                 val volume = command.optInt("arg", 50)
@@ -183,10 +184,10 @@ class RemoteControl(
                 takeAndSendScreenshot()
             }
             "show_notification" -> {
-                val arg = command.optString("arg", "")
+                val arg = command.optString("msg", "")
                 val timeout = command.optInt("timeout", 10) // Default to 10 seconds if not specified
                 if (arg.isEmpty()) {
-                    Log.w("RemoteControl", "Godmin server requested notification without message")
+                    Log.w("RemoteControl", "Server requested notification without message")
                     return
                 }
                 Log.d("RemoteControl", "Display message: $arg (timeout: $timeout)")

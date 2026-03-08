@@ -41,12 +41,6 @@ def init(database=DATABASE):
             value TEXT NOT NULL
         );
     """)
-    # Migrations
-    cols = [r[1] for r in db.execute("PRAGMA table_info(devices)").fetchall()]
-    if "alias" not in cols:
-        db.execute("ALTER TABLE devices ADD COLUMN alias TEXT")
-    if "daily_limit_mins" not in cols:
-        db.execute("ALTER TABLE devices ADD COLUMN daily_limit_mins INTEGER")
     db.close()
 
 

@@ -2,15 +2,13 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>NannyGodmin Dashboard</title>
+    <title>NannyGodmin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1><img src="{{ url_for('favicon') }}" alt="">NannyGodmin Dashboard</h1>
-    <p><a href="{{ url_for('new_device') }}">+ Add New Device</a> | <a href="{{ url_for('apk') }}">Download APK</a> | <a href="{{ url_for('config_page') }}">Config</a></p>
-
+    <h1><img src="{{ url_for('favicon') }}" alt="">NannyGodmin</h1>
     {% if relock_at %}
     <div class="relock-banner" id="relock-banner">
         Devices will re-lock in <span id="relock-countdown">--:--</span>
@@ -37,59 +35,59 @@
     <nav>
         <form action="{{ url_for('bulk_command') }}" method="post">
             <input type="hidden" name="action" value="lock_all">
-            <button type="submit" class="btn-lock">Lock All</button>
+            <button type="submit" class="btn-lock">Lock</button>
         </form>
         <form action="{{ url_for('bulk_command') }}" method="post">
             <input type="hidden" name="action" value="unlock_all">
-            <button type="submit" class="btn-unlock">Unlock All</button>
+            <button type="submit" class="btn-unlock">Unlock</button>
         </form>
         <form action="{{ url_for('bulk_command') }}" method="post">
             <input type="hidden" name="action" value="unlock_all_timed">
             <input type="hidden" name="duration" value="30">
-            <button type="submit" class="btn-timed">Unlock All (30 min)</button>
+            <button type="submit" class="btn-timed">+ 30 min</button>
         </form>
         <form action="{{ url_for('bulk_command') }}" method="post">
             <input type="hidden" name="action" value="unlock_all_timed">
             <input type="hidden" name="duration" value="60">
-            <button type="submit" class="btn-timed">Unlock All (1 hr)</button>
+            <button type="submit" class="btn-timed">+ 60 min</button>
         </form>
     </nav>
 
     {% if devices %}
     {% for device in devices %}
     <div class="device-row">
-        <strong>{{ device.alias or device.name }}</strong>
         {% if device.locked %}
         <mark class="locked">LOCKED</mark>
         {% else %}
         <mark class="unlocked">UNLOCKED</mark>
         {% endif %}
+        <strong>{{ device.alias or device.name }}</strong>
         {% set mins = usage_today[device.id] %}
         <small>Usage: {% if mins >= 60 %}{{ "%.1f"|format(mins / 60) }} hrs{% else %}{{ mins }} mins{% endif %}</small>
         <nav>
-            {% if device.locked %}
-            <form action="{{ url_for('send_command', device_id=device.id) }}" method="post">
-                <input type="hidden" name="action" value="unlock">
-                <button type="submit" class="btn-unlock">Unlock</button>
-            </form>
-            {% else %}
-            <form action="{{ url_for('send_command', device_id=device.id) }}" method="post">
-                <input type="hidden" name="action" value="lock">
-                <button type="submit" class="btn-lock">Lock</button>
-            </form>
-            {% endif %}
-            <form action="{{ url_for('send_command', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;">
-                <input type="hidden" name="action" value="set_volume">
-                <label>Vol:</label>
-                <input type="range" name="value" min="1" max="100" value="50" style="width:100px">
-                <button type="submit" class="btn-vol">Set</button>
-            </form>
         </nav>
+        <form action="{{ url_for('send_command', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;">
+            <button type="submit" class="btn-vol">Vol</button>
+            <input type="hidden" name="action" value="set_volume">
+            <input type="range" name="value" min="1" max="100" value="50" style="width:100px">
+        </form>
         <a href="{{ url_for('device_detail', device_id=device.id) }}"><button class="btn-details">Details</button></a>
+        {% if device.locked %}
+        <form action="{{ url_for('send_command', device_id=device.id) }}" method="post">
+            <input type="hidden" name="action" value="unlock">
+            <button type="submit" class="btn-unlock">Unlock</button>
+        </form>
+        {% else %}
+        <form action="{{ url_for('send_command', device_id=device.id) }}" method="post">
+            <input type="hidden" name="action" value="lock">
+            <button type="submit" class="btn-lock">Lock</button>
+        </form>
+        {% endif %}
     </div>
     {% endfor %}
     {% else %}
     <p><em>No devices registered. <a href="{{ url_for('new_device') }}">Add one.</a></em></p>
     {% endif %}
+    <p><a href="{{ url_for('new_device') }}">+ Add New Device</a> | <a href="{{ url_for('apk') }}">Download APK</a> | <a href="{{ url_for('config_page') }}">Config</a></p>
 </body>
 </html>
