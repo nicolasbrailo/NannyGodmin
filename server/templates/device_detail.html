@@ -56,6 +56,12 @@
             <input type="hidden" name="action" value="screenshot">
             <button type="submit" class="btn-screenshot">Request Screenshot</button>
         </form>
+        <form action="{{ url_for('send_command', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;">
+            <input type="hidden" name="action" value="show_notification">
+            <input type="text" name="msg" placeholder="Message..." required>
+            <input type="number" name="timeout" placeholder="10" min="1" style="width:60px" title="Timeout (seconds)">
+            <button type="submit" class="btn-details">Send Notification</button>
+        </form>
     </nav>
 
     <h2>Screenshot</h2>

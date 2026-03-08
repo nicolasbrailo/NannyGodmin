@@ -26,6 +26,8 @@ CONFIG_DEFAULTS = {
     "poll_interval_secs": 5,
     "daily_limit_mins": 120,
     "auto_lock": False,
+    "warning_enabled": False,
+    "warning_mins": 5,
 }
 
 
@@ -44,7 +46,12 @@ def _provision_config(config):
 
 
 def _alert_config(config):
-    return {"daily_limit_mins": config["daily_limit_mins"], "auto_lock": config["auto_lock"]}
+    return {
+        "daily_limit_mins": config["daily_limit_mins"],
+        "auto_lock": config["auto_lock"],
+        "warning_enabled": config["warning_enabled"],
+        "warning_mins": config["warning_mins"],
+    }
 
 
 @app.route("/")
@@ -185,8 +192,8 @@ def remove_device(device_id):
 @app.route("/device/<device_id>/command", methods=["POST"])
 def send_command(device_id):
     action = request.form.get("action")
-    value = request.form.get("value")
-    device.send_command(get_db(), device_id, action, value)
+    args = {k: v for k, v in request.form.items() if k != "action" and v}
+    device.send_command(get_db(), device_id, action, args)
     return redirect(request.referrer or url_for("dashboard"))
 
 
@@ -218,6 +225,13 @@ def config_save():
 
     auto_lock = request.form.get("auto_lock")
     db.set_config(conn, "auto_lock", auto_lock == "on")
+
+    warning_enabled = request.form.get("warning_enabled")
+    db.set_config(conn, "warning_enabled", warning_enabled == "on")
+
+    warning_mins = request.form.get("warning_mins")
+    if warning_mins is not None:
+        db.set_config(conn, "warning_mins", int(warning_mins))
 
     device.configure_alerts(_alert_config(_load_config()))
     return redirect(url_for("config_page"))

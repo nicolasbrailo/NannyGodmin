@@ -6,6 +6,8 @@ import device_timeline
 _alert_config = {
     "daily_limit_mins": None,  # None = disabled
     "auto_lock": False,
+    "warning_enabled": False,
+    "warning_mins": 5,
 }
 
 _usage_trackers = {}  # device_id -> tracker dict
@@ -20,6 +22,7 @@ def reset_triggered(device_id):
     tracker = _usage_trackers.get(device_id)
     if tracker:
         tracker["triggered"] = False
+        tracker["warned"] = False
 
 
 def _seed_tracker(conn, device_id):
@@ -40,6 +43,7 @@ def _seed_tracker(conn, device_id):
         "screen_on": screen_on,
         "server_locked": server_locked,
         "triggered": False,
+        "warned": False,
         "auto_locked": False,
     }
     _usage_trackers[device_id] = tracker
@@ -87,6 +91,7 @@ def check_usage(conn, device_id, device_name, action):
         tracker["date"] = today
         tracker["accumulated_secs"] = 0
         tracker["triggered"] = False
+        tracker["warned"] = False
         tracker["auto_locked"] = False
         if tracker["active_since"]:
             tracker["active_since"] = now
@@ -117,6 +122,18 @@ def check_usage(conn, device_id, device_name, action):
     # Day rollover may have unlocked
     if tracker["server_locked"] != was_locked_before:
         locked = tracker["server_locked"]
+
+    # Warning notification before threshold
+    warning_mins = _alert_config.get("warning_mins", 5)
+    warning_at = threshold - warning_mins
+    if (_alert_config.get("warning_enabled")
+            and not tracker["warned"]
+            and warning_at > 0
+            and current_mins >= warning_at):
+        tracker["warned"] = True
+        remaining = max(1, round(threshold - current_mins))
+        cmd = {"name": "show_notification", "msg": f"{remaining} minutes before shutdown", "timeout": 10}
+        db.replace_pending_command(conn, device_id, "show_notification", cmd)
 
     if not tracker["triggered"] and current_mins >= threshold:
         tracker["triggered"] = True

@@ -84,17 +84,21 @@ def save_screenshot(conn, screenshots_dir, client_id, data):
         f.write(data)
 
 
-def send_command(conn, device_id, action, value):
+def send_command(conn, device_id, action, args=None):
     if action in ("lock", "unlock"):
         db.set_device_locked(conn, device_id, action == "lock")
         usage_tracking.update_lock(device_id, action == "lock")
     else:
         cmd = {"name": action}
         if action == "set_volume":
-            cmd["arg"] = int(value)
+            cmd["arg"] = int(args.get("value", 50))
+        elif action == "show_notification":
+            cmd["msg"] = args.get("msg", "")
+            timeout = args.get("timeout")
+            cmd["timeout"] = int(timeout) if timeout else 10
         db.replace_pending_command(conn, device_id, action, cmd)
 
-    db.insert_action_log(conn, device_id, action, {"value": value} if value else None, "controller")
+    db.insert_action_log(conn, device_id, action, args or None, "controller")
     conn.commit()
 
 

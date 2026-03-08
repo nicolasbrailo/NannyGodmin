@@ -27,6 +27,14 @@
             <input type="checkbox" name="auto_lock" {{ 'checked' if config.auto_lock }}>
             Auto-lock devices when limit is reached
         </label>
+        <label>
+            <input type="checkbox" name="warning_enabled" {{ 'checked' if config.warning_enabled }}>
+            Send warning notification before limit
+        </label>
+        <label>
+            Warning lead time (minutes)
+            <input type="number" name="warning_mins" value="{{ config.warning_mins }}" min="1">
+        </label>
 
         <div style="margin-top:16px">
             <button type="submit" class="btn-details">Save</button>

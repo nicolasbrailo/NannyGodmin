@@ -1,24 +1,14 @@
 package com.nicobrailo.nannygodmin
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.PixelFormat
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import android.util.Log
-import android.view.Gravity
-import android.view.WindowManager
-import android.widget.TextView
-import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -32,6 +22,7 @@ class RemoteControl(
     private val onUnauthorized: () -> Unit
 ) {
     private val handler = Handler(Looper.getMainLooper())
+    private val messageHelper = RemoteControlMessage(context, handler)
     private var isRunning = false
     private var isLocked = false
     private var currentActivity = "Unknown"
@@ -193,12 +184,13 @@ class RemoteControl(
             }
             "show_notification" -> {
                 val arg = command.optString("arg", "")
+                val timeout = command.optInt("timeout", 10) // Default to 10 seconds if not specified
                 if (arg.isEmpty()) {
                     Log.w("RemoteControl", "Godmin server requested notification without message")
                     return
                 }
-                Log.d("RemoteControl", "Display message: $arg")
-                showMessage(arg)
+                Log.d("RemoteControl", "Display message: $arg (timeout: $timeout)")
+                messageHelper.showMessage(arg, timeout)
             }
             else -> Log.w("RemoteControl", "Unknown command: $name")
         }
@@ -247,83 +239,5 @@ class RemoteControl(
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         val targetVolume = (maxVolume * (volumePercent / 100.0)).toInt()
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVolume, 0)
-    }
-
-    private fun showMessage(message: String) {
-        showSystemNotification(message)
-        showOverlay(message)
-    }
-
-    private fun showSystemNotification(message: String) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "RemoteAlerts"
-
-        val channel = NotificationChannel(
-            channelId,
-            "Remote Alerts",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Notifications from the NannyGodmin administrator"
-        }
-        notificationManager.createNotificationChannel(channel)
-
-        val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Message from Admin")
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
-    }
-
-    private fun showOverlay(message: String) {
-        if (!Settings.canDrawOverlays(context)) {
-            Log.w("RemoteControl", "Cannot show overlay: Permission not granted in Settings")
-            return
-        }
-
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val textView = TextView(context).apply {
-            text = message
-            setBackgroundColor(Color.parseColor("#EE333333"))
-            setTextColor(Color.WHITE)
-            setPadding(64, 48, 64, 48)
-            gravity = Gravity.CENTER
-            textSize = 18f
-            elevation = 10f
-        }
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP
-            y = 150 // Offset from top
-        }
-
-        try {
-            windowManager.addView(textView, params)
-            // Auto-remove the overlay after 10 seconds
-            handler.postDelayed({
-                try {
-                    windowManager.removeView(textView)
-                } catch (e: Exception) { /* already removed */ }
-            }, 10000)
-            
-            // Also remove on click
-            textView.setOnClickListener {
-                try {
-                    windowManager.removeView(textView)
-                } catch (e: Exception) { /* already removed */ }
-            }
-        } catch (e: Exception) {
-            Log.e("RemoteControl", "Error showing overlay: ${e.message}")
-        }
     }
 }
