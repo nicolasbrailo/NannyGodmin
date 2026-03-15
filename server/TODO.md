@@ -4,5 +4,4 @@
 - Explore websocket instead of polling
 - Move to https
 - Use device attestation for enrollment
-- Enable threshold per group (eg group tabs 1+2, then threshold is set per tab)
 - Add config, lock state resets at midnight or not

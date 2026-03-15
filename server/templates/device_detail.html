@@ -61,12 +61,27 @@
       </form>
       <form action="{{ url_for('set_daily_limit', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
           <label>Daily limit (mins):</label>
-          <input type="number" name="daily_limit_mins" 
+          <input type="number" name="daily_limit_mins"
             value="{{ device.daily_limit_mins if device.daily_limit_mins is not none else '' }}" placeholder="{{ global_daily_limit_mins if global_daily_limit_mins is not none else 'No limit' }}"
             min="1" style="width:100px">
           <button type="submit" class="btn-details">Save</button>
-          {% if device.daily_limit_mins is not none %}
+          {% if current_group and current_group.daily_limit_mins is not none %}
+          <small>(overridden by group: {{ current_group.name }} = {{ current_group.daily_limit_mins }} mins)</small>
+          {% elif device.daily_limit_mins is not none %}
           <small>(overrides global: {{ global_daily_limit_mins if global_daily_limit_mins is not none else 'disabled' }})</small>
+          {% endif %}
+      </form>
+      <form action="{{ url_for('set_device_group', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+          <label>Group:</label>
+          <select name="group_id">
+              <option value="">None</option>
+              {% for g in groups %}
+              <option value="{{ g.id }}" {{ 'selected' if device.group_id == g.id }}>{{ g.name }}</option>
+              {% endfor %}
+          </select>
+          <button type="submit" class="btn-details">Save</button>
+          {% if current_group %}
+          <small><a href="{{ url_for('group_detail', group_id=current_group.id) }}">View group</a></small>
           {% endif %}
       </form>
     </details>

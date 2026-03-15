@@ -43,6 +43,12 @@ nav form { display: inline; }
 .device-row small { width: 110px; flex-shrink: 0; }
 .device-row nav { flex: 1; margin: 0; gap: 6px; }
 
+/* Dashboard: group sections */
+.group-section { border: 1px solid #ccc; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+.group-header { display: flex; align-items: center; gap: 10px; padding: 4px 6px; margin-bottom: 6px; flex-wrap: wrap; }
+.group-header strong { font-size: 1.05em; }
+.group-section .device-row { margin-bottom: 4px; border-color: #eee; }
+
 /* Dashboard: relock banner */
 .relock-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; font-weight: bold; }
 

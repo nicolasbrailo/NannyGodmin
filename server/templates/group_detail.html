@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ group.name }} - NannyGodmin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <p><a href="{{ url_for('groups_page') }}">&larr; Back to Groups</a></p>
+
+    <h1><img src="{{ url_for('favicon') }}" alt="">{{ group.name }}</h1>
+
+    {% set mins = total_usage_mins %}
+    <p>Total usage today: <strong>{% if mins >= 60 %}{{ "%.1f"|format(mins / 60) }} hrs{% else %}{{ mins }} mins{% endif %}</strong>
+    {% if group.daily_limit_mins is not none %} / {{ group.daily_limit_mins }} min limit{% endif %}</p>
+
+    <details>
+      <summary>Settings</summary>
+      <form action="{{ url_for('update_group', group_id=group.id) }}" method="post" style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+          <input type="text" name="name" value="{{ group.name }}" required>
+          <label>Limit (mins):</label>
+          <input type="number" name="daily_limit_mins"
+            value="{{ group.daily_limit_mins if group.daily_limit_mins is not none else '' }}"
+            placeholder="{{ global_daily_limit_mins if global_daily_limit_mins is not none else 'No limit' }}"
+            min="1" style="width:100px">
+          <button type="submit" class="btn-details">Save</button>
+      </form>
+    </details>
+
+    <h2>Devices</h2>
+    {% if devices %}
+    {% for d in devices %}
+    <div class="device-row">
+        {% if d.locked %}
+        <mark class="locked">LOCKED</mark>
+        {% else %}
+        <mark class="unlocked">UNLOCKED</mark>
+        {% endif %}
+        <strong>{{ d.alias or d.name }}</strong>
+        {% set dmins = device_usage[d.id].active_mins %}
+        <small>Usage: {% if dmins >= 60 %}{{ "%.1f"|format(dmins / 60) }} hrs{% else %}{{ dmins }} mins{% endif %}</small>
+        <a href="{{ url_for('device_detail', device_id=d.id) }}"><button class="btn-details">Details</button></a>
+        <form action="{{ url_for('group_remove_device', group_id=group.id) }}" method="post" style="display:inline">
+            <input type="hidden" name="device_id" value="{{ d.id }}">
+            <button type="submit" class="btn-danger" style="font-size:0.8em">Remove</button>
+        </form>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p><em>No devices in this group.</em></p>
+    {% endif %}
+
+    {% if unassigned_devices %}
+    <h2>Add Device</h2>
+    <form action="{{ url_for('group_add_device', group_id=group.id) }}" method="post" style="display:flex;align-items:center;gap:6px;">
+        <select name="device_id" required>
+            {% for d in unassigned_devices %}
+            <option value="{{ d.id }}">{{ d.alias or d.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn-details">Add to Group</button>
+    </form>
+    {% endif %}
+
+    <nav style="margin-top:20px">
+        <form action="{{ url_for('remove_group', group_id=group.id) }}" method="post"
+              onsubmit="return confirm('Remove this group? Devices will be unassigned.')">
+            <button type="submit" class="btn-danger">Remove Group</button>
+        </form>
+    </nav>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Groups - NannyGodmin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('favicon') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <p><a href="{{ url_for('dashboard') }}">&larr; Back to Dashboard</a></p>
+    <h1><img src="{{ url_for('favicon') }}" alt="">Device Groups</h1>
+
+    {% if groups %}
+    {% for entry in groups %}
+    <div class="device-row">
+        <strong>{{ entry.group.name }}</strong>
+        <small>{{ entry.devices|length }} device{{ 's' if entry.devices|length != 1 }}</small>
+        {% set mins = entry.usage_mins %}
+        <small>Usage: {% if mins >= 60 %}{{ "%.1f"|format(mins / 60) }} hrs{% else %}{{ mins }} mins{% endif %}
+        {% if entry.group.daily_limit_mins is not none %} / {{ entry.group.daily_limit_mins }} min limit{% endif %}</small>
+        <a href="{{ url_for('group_detail', group_id=entry.group.id) }}"><button class="btn-details">Details</button></a>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p><em>No groups created yet.</em></p>
+    {% endif %}
+
+    <h2>Create Group</h2>
+    <form action="{{ url_for('create_group') }}" method="post" style="display:flex;align-items:center;gap:6px;">
+        <input type="text" name="name" placeholder="Group name" required>
+        <input type="number" name="daily_limit_mins" placeholder="Daily limit (mins)" min="1" style="width:160px">
+        <button type="submit" class="btn-details">Create</button>
+    </form>
+</body>
+</html>

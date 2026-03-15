@@ -66,10 +66,17 @@ def _alert_config(config):
 
 @app.route("/")
 def dashboard():
-    devices, usage_today = device.get_all_devices_with_usage(get_db())
+    devices, usage_today, groups_by_id = device.get_all_devices_with_usage(get_db())
     relock_at = device.get_relock_at()
     relock_at = relock_at.isoformat() if relock_at else None
-    return render_template("dashboard.html", devices=devices, usage_today=usage_today, relock_at=relock_at)
+    # Compute per-group aggregated usage
+    group_usage = {}
+    for d in devices:
+        gid = d["group_id"]
+        if gid:
+            group_usage[gid] = group_usage.get(gid, 0) + usage_today[d["id"]]["active_mins"]
+    return render_template("dashboard.html", devices=devices, usage_today=usage_today,
+                           groups_by_id=groups_by_id, group_usage=group_usage, relock_at=relock_at)
 
 
 @app.route("/new_device")
@@ -145,6 +152,11 @@ def device_detail(device_id):
         screenshot_url = url_for("serve_screenshot", filename=detail["screenshot_filename"])
 
     config = _load_config()
+    conn = get_db()
+    groups = device.get_all_groups(conn)
+    current_group = None
+    if detail["device"]["group_id"]:
+        current_group = db.get_device_group(conn, detail["device"]["group_id"])
     return render_template(
         "device_detail.html",
         device=detail["device"],
@@ -156,6 +168,8 @@ def device_detail(device_id):
         slot_hours=detail["slot_hours"],
         app_timeline=detail["app_timeline"],
         global_daily_limit_mins=config["daily_limit_mins"],
+        groups=groups,
+        current_group=current_group,
     )
 
 
@@ -279,6 +293,83 @@ def telegram_test():
         except Exception:
             log.warning("Failed to send Telegram alert", exc_info=True)
     return redirect(url_for("config_page"))
+
+
+@app.route("/device/<device_id>/group", methods=["POST"])
+def set_device_group(device_id):
+    group_id = request.form.get("group_id", "").strip() or None
+    device.assign_device_to_group(get_db(), device_id, group_id)
+    return redirect(url_for("device_detail", device_id=device_id))
+
+
+@app.route("/groups")
+def groups_page():
+    groups_with_usage = device.get_all_groups_with_usage(get_db())
+    return render_template("groups.html", groups=groups_with_usage)
+
+
+@app.route("/groups", methods=["POST"])
+def create_group():
+    name = request.form.get("name", "").strip()
+    limit = request.form.get("daily_limit_mins", "").strip()
+    try:
+        device.create_group(get_db(), name, int(limit) if limit else None)
+    except device.ValidationError as e:
+        return str(e), 400
+    return redirect(url_for("groups_page"))
+
+
+@app.route("/group/<group_id>")
+def group_detail(group_id):
+    try:
+        detail = device.get_group_detail(get_db(), group_id)
+    except device.DeviceNotFound:
+        return "Group not found", 404
+    conn = get_db()
+    # Devices not in any group (available to add)
+    all_devices = db.get_all_devices(conn)
+    unassigned = [d for d in all_devices if not d["group_id"]]
+    config = _load_config()
+    return render_template("group_detail.html",
+                           group=detail["group"],
+                           devices=detail["devices"],
+                           device_usage=detail["device_usage"],
+                           total_usage_mins=detail["total_usage_mins"],
+                           unassigned_devices=unassigned,
+                           global_daily_limit_mins=config["daily_limit_mins"])
+
+
+@app.route("/group/<group_id>", methods=["POST"])
+def update_group(group_id):
+    name = request.form.get("name", "").strip()
+    limit = request.form.get("daily_limit_mins", "").strip()
+    try:
+        device.update_group(get_db(), group_id, name, int(limit) if limit else None)
+    except device.ValidationError as e:
+        return str(e), 400
+    except device.DeviceNotFound:
+        return "Group not found", 404
+    return redirect(url_for("group_detail", group_id=group_id))
+
+
+@app.route("/group/<group_id>/add_device", methods=["POST"])
+def group_add_device(group_id):
+    device_id = request.form.get("device_id")
+    device.assign_device_to_group(get_db(), device_id, group_id)
+    return redirect(url_for("group_detail", group_id=group_id))
+
+
+@app.route("/group/<group_id>/remove_device", methods=["POST"])
+def group_remove_device(group_id):
+    device_id = request.form.get("device_id")
+    device.assign_device_to_group(get_db(), device_id, None)
+    return redirect(url_for("group_detail", group_id=group_id))
+
+
+@app.route("/group/<group_id>/remove", methods=["POST"])
+def remove_group(group_id):
+    device.remove_group(get_db(), group_id)
+    return redirect(url_for("groups_page"))
 
 
 if __name__ == "__main__":

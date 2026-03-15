@@ -39,13 +39,22 @@ Flask app with Jinja2 templates and SQLite (`nannygodmin.sqlite`). No ORM — ra
 | `/device/<id>/daily_limit` | POST | Set per-device daily usage limit (overrides global) |
 | `/device/<id>/clear_history` | POST | Clear a device's action log |
 | `/device/<id>/remove` | POST | Remove a device and its history |
+| `/device/<id>/group` | POST | Set device group assignment |
 | `/bulk_command` | POST | Lock/unlock all devices (form: action + optional duration) |
+| `/groups` | GET | Group management page |
+| `/groups` | POST | Create a new group (form: name, daily_limit_mins) |
+| `/group/<id>` | GET | Group detail page (members, aggregated usage) |
+| `/group/<id>` | POST | Update group settings (name, daily_limit_mins) |
+| `/group/<id>/add_device` | POST | Assign a device to a group |
+| `/group/<id>/remove_device` | POST | Unassign a device from a group |
+| `/group/<id>/remove` | POST | Remove a group (unassigns devices) |
 | `/config` | GET | Config page |
 | `/config` | POST | Save config (poll_interval_secs, daily_limit_mins, auto_lock) |
 
 ### Database Tables
 
-- `devices` — registered devices (UUID primary key, name, alias, daily_limit_mins, locked, timestamp)
+- `devices` — registered devices (UUID primary key, name, alias, daily_limit_mins, group_id FK, locked, timestamp)
+- `device_groups` — groups of devices belonging to one person (UUID primary key, name, daily_limit_mins, created_at)
 - `action_log` — event log for both device reports (source=device) and controller commands (source=controller)
 - `pending_commands` — fire-and-forget command queue; commands are returned to the device on next `/device_report` call and then deleted
 - `config` — key-value store for app-level settings (poll_interval_secs, daily_limit_mins, auto_lock)
@@ -55,7 +64,8 @@ Flask app with Jinja2 templates and SQLite (`nannygodmin.sqlite`). No ORM — ra
 - **Command deduplication**: when queueing a command, previous pending commands in the same override group are replaced. Groups: `{set_volume}`, `{lock, unlock}`.
 - **Device report**: `action` is optional — a device can call `/device_report` with just `{clientId}` to poll for commands without reporting anything.
 - **app_change events**: the Android accessibility service reports `app_change` with `new_activity` set to a package/activity string. `"Unknown"` does NOT mean the screen is off — it's noise from the accessibility service losing track of the foreground app during transitions. The real app keeps running. Use `screen_off`/`screen_on` events for actual screen state. See `device_timeline.compute_app_timeline` for the full heuristic (5 phases: raw spans, contiguous merge, drop short, re-merge, gap merge for same-app spans <5 min apart).
-- **Usage alerts**: global threshold (`daily_limit_mins`) and `auto_lock` are stored in the `config` table, with hardcoded defaults in `app.py` (`CONFIG_DEFAULTS`). Per-device overrides via `devices.daily_limit_mins` take precedence. When a device's accumulated screen-on time crosses the effective threshold, an alert is printed to stdout. If `auto_lock` is enabled, the device is locked and marked `auto_locked`; at midnight the lock and threshold are reset lazily on the next device report. Manual unlock (single or bulk) clears `auto_locked` and respects timed unlock durations. Changing a device's per-device limit resets the `triggered` flag so the alert can re-fire at the new threshold.
+- **Usage alerts**: global threshold (`daily_limit_mins`) and `auto_lock` are stored in the `config` table, with hardcoded defaults in `app.py` (`CONFIG_DEFAULTS`). Effective threshold resolution: group override > per-device override > global config. When a device's (or group's aggregated) accumulated screen-on time crosses the effective threshold, an alert is printed to stdout. If `auto_lock` is enabled, the device (or all devices in the group) is locked and marked `auto_locked`; at midnight the lock and threshold are reset lazily on the next device report. Manual unlock (single or bulk) clears `auto_locked` and respects timed unlock durations. Changing a device's per-device or group limit resets the `triggered` flag so the alert can re-fire at the new threshold.
+- **Device groups**: devices can be grouped by person. When a device is in a group with a `daily_limit_mins`, usage is aggregated across all group members and the group threshold governs. When the group threshold is crossed with auto-lock enabled, all devices in the group are locked. Warnings are sent to all group devices. Day rollover resets group state. Each device still maintains its own tracker; aggregation happens at threshold-check time by summing across member trackers.
 - **Device alias**: optional per-device alias displayed instead of the device-reported name on the dashboard and detail page title. Set from the detail page.
 - **QR code**: encodes `nannygodmin://config?url=http://<lan-ip>:<port>/`; port is read from the incoming request, not hardcoded.
 

@@ -40,7 +40,19 @@ def init(database=DATABASE):
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS device_groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            daily_limit_mins INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
+    try:
+        db.execute("ALTER TABLE devices ADD COLUMN group_id TEXT REFERENCES device_groups(id)")
+        db.commit()
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e):
+            raise
     db.close()
 
 
@@ -208,3 +220,59 @@ def replace_pending_command(db, device_id, action_name, command):
         "INSERT INTO pending_commands (device_id, command) VALUES (?, ?)",
         (device_id, json.dumps(command)),
     )
+
+
+# --- Device groups ---
+
+def create_device_group(db, group_id, name, daily_limit_mins=None):
+    db.execute(
+        "INSERT INTO device_groups (id, name, daily_limit_mins) VALUES (?, ?, ?)",
+        (group_id, name, daily_limit_mins),
+    )
+    db.commit()
+
+
+def get_all_device_groups(db):
+    return db.execute("SELECT * FROM device_groups ORDER BY name").fetchall()
+
+
+def get_device_group(db, group_id):
+    return db.execute("SELECT * FROM device_groups WHERE id = ?", (group_id,)).fetchone()
+
+
+def update_device_group(db, group_id, name, daily_limit_mins):
+    db.execute(
+        "UPDATE device_groups SET name = ?, daily_limit_mins = ? WHERE id = ?",
+        (name, daily_limit_mins, group_id),
+    )
+    db.commit()
+
+
+def remove_device_group(db, group_id):
+    db.execute("UPDATE devices SET group_id = NULL WHERE group_id = ?", (group_id,))
+    db.execute("DELETE FROM device_groups WHERE id = ?", (group_id,))
+    db.commit()
+
+
+def set_device_group(db, device_id, group_id):
+    db.execute(
+        "UPDATE devices SET group_id = ? WHERE id = ?",
+        (group_id, device_id),
+    )
+    db.commit()
+
+
+def get_devices_in_group(db, group_id):
+    return db.execute(
+        "SELECT * FROM devices WHERE group_id = ? ORDER BY registered_at DESC",
+        (group_id,),
+    ).fetchall()
+
+
+def get_device_group_for_device(db, device_id):
+    return db.execute(
+        "SELECT g.* FROM device_groups g "
+        "JOIN devices d ON d.group_id = g.id "
+        "WHERE d.id = ?",
+        (device_id,),
+    ).fetchone()

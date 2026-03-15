@@ -53,8 +53,7 @@
         </form>
     </nav>
 
-    {% if devices %}
-    {% for device in devices %}
+    {% macro device_row(device) %}
     <div class="device-row">
         {% if device.locked %}
         <mark class="locked">LOCKED</mark>
@@ -84,10 +83,29 @@
         </form>
         {% endif %}
     </div>
+    {% endmacro %}
+
+    {% if devices %}
+    {% for gid, group in groups_by_id.items() if gid in group_usage %}
+    <div class="group-section">
+        <div class="group-header">
+            <strong>{{ group.name }}</strong>
+            {% set gmins = group_usage[gid] %}
+            <small>Total: {% if gmins >= 60 %}{{ "%.1f"|format(gmins / 60) }} hrs{% else %}{{ gmins }} mins{% endif %}
+            {% if group["daily_limit_mins"] is not none %} / {{ group["daily_limit_mins"] }} min limit{% endif %}</small>
+            <a href="{{ url_for('group_detail', group_id=gid) }}"><button class="btn-details" style="font-size:0.8em">Group</button></a>
+        </div>
+        {% for d in devices if d["group_id"] == gid %}
+        {{ device_row(d) }}
+        {% endfor %}
+    </div>
+    {% endfor %}
+    {% for d in devices if not d["group_id"] %}
+    {{ device_row(d) }}
     {% endfor %}
     {% else %}
     <p><em>No devices registered. <a href="{{ url_for('new_device') }}">Add one.</a></em></p>
     {% endif %}
-    <p><a href="{{ url_for('new_device') }}">+ Add New Device</a> | <a href="{{ url_for('apk') }}">Download APK</a> | <a href="{{ url_for('config_page') }}">Config</a></p>
+    <p><a href="{{ url_for('new_device') }}">+ Add New Device</a> | <a href="{{ url_for('apk') }}">Download APK</a> | <a href="{{ url_for('groups_page') }}">Groups</a> | <a href="{{ url_for('config_page') }}">Config</a></p>
 </body>
 </html>

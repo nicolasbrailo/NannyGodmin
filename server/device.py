@@ -1,5 +1,6 @@
 import os
 import threading
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import db
@@ -30,7 +31,9 @@ def get_all_devices_with_usage(conn):
     for d in devices:
         active, ignored = device_timeline.get_today_usage_split(conn, d["id"], ignore_re)
         usage_today[d["id"]] = {"active_mins": active, "ignored_mins": ignored}
-    return devices, usage_today
+    groups = db.get_all_device_groups(conn)
+    groups_by_id = {g["id"]: g for g in groups}
+    return devices, usage_today, groups_by_id
 
 
 def set_device_alias(conn, device_id, alias):
@@ -215,4 +218,83 @@ def get_device_debug(conn, device_id):
         "device": device_row,
         "logs": logs,
         "transitions": transitions,
+    }
+
+
+# --- Device groups ---
+
+def get_all_groups(conn):
+    return db.get_all_device_groups(conn)
+
+
+def get_all_groups_with_usage(conn):
+    groups = db.get_all_device_groups(conn)
+    ignore_re = usage_tracking._usage_ignore_re
+    result = []
+    for g in groups:
+        devices = db.get_devices_in_group(conn, g["id"])
+        total_mins = 0
+        for d in devices:
+            active, _ = device_timeline.get_today_usage_split(conn, d["id"], ignore_re)
+            total_mins += active
+        result.append({
+            "group": g,
+            "devices": devices,
+            "usage_mins": total_mins,
+        })
+    return result
+
+
+def create_group(conn, name, daily_limit_mins=None):
+    if not name or not name.strip():
+        raise ValidationError("Group name is required")
+    group_id = str(uuid.uuid4())
+    db.create_device_group(conn, group_id, name.strip(), daily_limit_mins)
+    return group_id
+
+
+def update_group(conn, group_id, name, daily_limit_mins):
+    group = db.get_device_group(conn, group_id)
+    if not group:
+        raise DeviceNotFound("unknown group")
+    if not name or not name.strip():
+        raise ValidationError("Group name is required")
+    db.update_device_group(conn, group_id, name.strip(), daily_limit_mins)
+    # Reset triggered state so threshold can re-fire at new limit
+    if daily_limit_mins != group["daily_limit_mins"]:
+        for d in db.get_devices_in_group(conn, group_id):
+            usage_tracking.reset_triggered(d["id"])
+
+
+def remove_group(conn, group_id):
+    devices = db.get_devices_in_group(conn, group_id)
+    db.remove_device_group(conn, group_id)
+    for d in devices:
+        usage_tracking.update_device_group_assignment(d["id"], None)
+
+
+def assign_device_to_group(conn, device_id, group_id):
+    if group_id and not db.get_device_group(conn, group_id):
+        raise DeviceNotFound("unknown group")
+    db.set_device_group(conn, device_id, group_id)
+    usage_tracking.update_device_group_assignment(device_id, group_id)
+
+
+def get_group_detail(conn, group_id):
+    group = db.get_device_group(conn, group_id)
+    if not group:
+        raise DeviceNotFound("unknown group")
+    devices = db.get_devices_in_group(conn, group_id)
+    ignore_re = usage_tracking._usage_ignore_re
+    total_mins = 0
+    device_usage = {}
+    for d in devices:
+        active, ignored = device_timeline.get_today_usage_split(conn, d["id"], ignore_re)
+        device_usage[d["id"]] = {"active_mins": active, "ignored_mins": ignored}
+        total_mins += active
+    return {
+        "group": group,
+        "devices": devices,
+        "device_usage": device_usage,
+        "total_usage_mins": total_mins,
     }
