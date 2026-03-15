@@ -24,4 +24,6 @@
     <string name="no_client_id_response">No clientId in response</string>
     <string name="server_returned_error">Server returned %1$d</string>
     <string name="unknown_error">Unknown error</string>
+    <string name="download_app_update">Download App Update</string>
+    <string name="failed_to_open_update_url">Failed to open update URL</string>
 </resources>

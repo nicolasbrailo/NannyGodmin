@@ -219,6 +219,19 @@ class RemoteControl(
                 Log.d("RemoteControl", "Display message: $arg (timeout: $timeout)")
                 messageHelper.showMessage(arg, timeout)
             }
+            "app_update_notify" -> {
+                val url = command.optString("url", "")
+                if (url.isEmpty()) {
+                    Log.w("RemoteControl", "App received apk update request, but no URL")
+                    return;
+                }
+                Log.i("RemoteControl", "App update notify received: $url")
+                val intent = Intent(context, ConfigActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra(ConfigActivity.EXTRA_UPDATE_URL, url)
+                }
+                context.startActivity(intent)
+            }
             else -> Log.w("RemoteControl", "Unknown command: $name")
         }
     }

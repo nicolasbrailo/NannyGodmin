@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -34,6 +35,7 @@ class ConfigActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_FORCE_REPROVISION = "EXTRA_FORCE_REPROVISION"
+        const val EXTRA_UPDATE_URL = "EXTRA_UPDATE_URL"
         private const val TAG = "ConfigActivity"
         private const val PREFS_NAME = "prefs"
         private const val KEY_SERVER_URL = "server_url"
@@ -79,6 +81,7 @@ class ConfigActivity : AppCompatActivity() {
     private lateinit var urlInput: EditText
     private lateinit var btnSaveUrl: Button
     private lateinit var btnUnprovision: Button
+    private lateinit var btnUpdate: Button
     private lateinit var permissionContainer: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -129,6 +132,13 @@ class ConfigActivity : AppCompatActivity() {
             }
         }
 
+        btnUpdate = Button(this).apply {
+            text = "Download App Update"
+            visibility = View.GONE
+            setBackgroundColor(Color.BLUE)
+            setTextColor(Color.WHITE)
+        }
+
         permissionContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -140,9 +150,11 @@ class ConfigActivity : AppCompatActivity() {
         layout.addView(urlInput)
         layout.addView(btnSaveUrl)
         layout.addView(btnUnprovision)
+        layout.addView(btnUpdate)
 
         // Initial UI state setup
         updateUI(currentUrl, currentClientId)
+        handleUpdateIntent(intent)
 
         btnSaveUrl.setOnClickListener {
             val newUrl = urlInput.text.toString().trim()
@@ -171,6 +183,28 @@ class ConfigActivity : AppCompatActivity() {
         if (settings != null && !forceReprovision) {
             Log.i(TAG, "Device already provisioned, starting MainService")
             startForegroundService(Intent(this, MainService::class.java))
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleUpdateIntent(intent)
+    }
+
+    private fun handleUpdateIntent(intent: Intent?) {
+        val updateUrl = intent?.getStringExtra(EXTRA_UPDATE_URL)
+        if (!updateUrl.isNullOrEmpty()) {
+            Log.i(TAG, "Update URL received: $updateUrl")
+            btnUpdate.visibility = View.VISIBLE
+            btnUpdate.setOnClickListener {
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, updateUrl.toUri())
+                    startActivity(browserIntent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Failed to open update URL", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
