@@ -26,6 +26,7 @@ class RemoteControl(
     private var isRunning = false
     private var isLocked = false
     private var currentActivity = "Unknown"
+    private var consecutiveFailures = 0
 
     private val pollTask = object : Runnable {
         override fun run() {
@@ -114,28 +115,47 @@ class RemoteControl(
 
                 connection.outputStream.use { it.write(body.toByteArray()) }
 
-                val responseCode = connection.responseCode
-                if (responseCode == HttpURLConnection.HTTP_OK) {
-                    val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    val json = JSONObject(response)
-                    
-                    val locked = json.optBoolean("locked", false)
-                    val commands = json.optJSONArray("commands") ?: JSONArray()
-                    
-                    handler.post {
-                        updateLockState(locked)
-                        for (i in 0 until commands.length()) {
-                            handleCommand(commands.getJSONObject(i))
+                when (val responseCode = connection.responseCode) {
+                    HttpURLConnection.HTTP_OK -> {
+                        val response = connection.inputStream.bufferedReader().use { it.readText() }
+                        val json = JSONObject(response)
+
+                        val locked = json.optBoolean("locked", false)
+                        val commands = json.optJSONArray("commands") ?: JSONArray()
+
+                        handler.post {
+                            consecutiveFailures = 0
+                            updateLockState(locked)
+                            for (i in 0 until commands.length()) {
+                                handleCommand(commands.getJSONObject(i))
+                            }
                         }
                     }
-                } else if (responseCode == HttpURLConnection.HTTP_NOT_FOUND || responseCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
-                    Log.w("RemoteControl", "Device unprovisioned (HTTP $responseCode). Stopping Godmin tasks.")
-                    handler.post { onUnauthorized() }
-                } else {
-                    Log.e("RemoteControl", "Server returned unexpected status: $responseCode")
+                    HttpURLConnection.HTTP_NOT_FOUND, HttpURLConnection.HTTP_UNAUTHORIZED -> {
+                        Log.w("RemoteControl", "Device unprovisioned (HTTP $responseCode). Stopping Godmin tasks.")
+                        handler.post {
+                            consecutiveFailures = 0
+                            onUnauthorized()
+                        }
+                    }
+                    else -> {
+                        Log.e("RemoteControl", "Server returned unexpected status: $responseCode")
+                        incrementFailuresAndCheckFailOpen()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("RemoteControl", "Error sending report: ${e.message}")
+                incrementFailuresAndCheckFailOpen()
+            }
+        }
+    }
+
+    private fun incrementFailuresAndCheckFailOpen() {
+        handler.post {
+            consecutiveFailures++
+            if (settings.failOpen && consecutiveFailures >= 3) {
+                Log.w("RemoteControl", "Fail-open triggered after $consecutiveFailures consecutive failures")
+                updateLockState(false)
             }
         }
     }
@@ -175,6 +195,12 @@ class RemoteControl(
     private fun handleCommand(command: JSONObject) {
         Log.d("RemoteControl", "Received command: $command")
         when (val name = command.optString("name")) {
+            "provisioning_config" -> {
+                val pollInterval = command.optInt("poll_interval_secs", settings.pollIntervalSecs)
+                val failOpen = command.optBoolean("fail_open", settings.failOpen)
+                Log.i("RemoteControl", "Updating provisioning config: interval=$pollInterval, failOpen=$failOpen")
+                ConfigActivity.updateConfig(context, pollInterval, failOpen)
+            }
             "set_volume" -> {
                 val volume = command.optInt("arg", 50)
                 setSystemVolume(volume)

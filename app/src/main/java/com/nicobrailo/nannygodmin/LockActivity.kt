@@ -41,10 +41,8 @@ class LockActivity : AppCompatActivity() {
         setShowWhenLocked(true)
         
         // Ensure we don't wake the screen automatically
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setTurnScreenOn(false)
-        }
-        
+        setTurnScreenOn(false)
+
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
             @Suppress("DEPRECATION")

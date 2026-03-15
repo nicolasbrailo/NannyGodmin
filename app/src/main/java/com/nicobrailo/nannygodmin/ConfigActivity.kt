@@ -28,7 +28,8 @@ class ConfigActivity : AppCompatActivity() {
     data class ProvisioningSettings(
         val serverUrl: String,
         val clientId: String,
-        val pollIntervalSecs: Int
+        val pollIntervalSecs: Int,
+        val failOpen: Boolean
     )
 
     companion object {
@@ -38,17 +39,31 @@ class ConfigActivity : AppCompatActivity() {
         private const val KEY_SERVER_URL = "server_url"
         private const val KEY_CLIENT_ID = "client_id"
         private const val KEY_POLL_INTERVAL = "poll_interval_secs"
+        private const val KEY_FAIL_OPEN = "fail_open"
 
         fun getSettings(context: Context): ProvisioningSettings? {
             val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             val url = prefs.getString(KEY_SERVER_URL, null)
             val id = prefs.getString(KEY_CLIENT_ID, null)
             val interval = prefs.getInt(KEY_POLL_INTERVAL, 10)
+            val failOpen = prefs.getBoolean(KEY_FAIL_OPEN, false)
             return if (url != null && id != null) {
-                ProvisioningSettings(url, id, interval)
+                ProvisioningSettings(url, id, interval, failOpen)
             } else {
                 null
             }
+        }
+
+        fun updateConfig(context: Context, pollIntervalSecs: Int, failOpen: Boolean) {
+            Log.i(TAG, "Updating config: pollIntervalSecs=$pollIntervalSecs, failOpen=$failOpen")
+            context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit(commit = true) {
+                putInt(KEY_POLL_INTERVAL, pollIntervalSecs)
+                putBoolean(KEY_FAIL_OPEN, failOpen)
+            }
+            
+            // Restart the service to apply new settings (especially poll interval)
+            val intent = Intent(context, MainService::class.java)
+            context.startForegroundService(intent)
         }
 
         fun clearClientId(context: Context) {
@@ -279,7 +294,7 @@ class ConfigActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (clientId.isNotEmpty()) {
                             Log.i(TAG, "Provisioning success. Received Client ID: $clientId")
-                            saveProvisioning(newUrl, clientId, json.optInt("poll_interval_secs", 10))
+                            saveProvisioning(newUrl, clientId, json.optInt("poll_interval_secs", 10), json.optBoolean("fail_open", false))
                         } else {
                             handleProvisioningFailure(getString(R.string.no_client_id_response))
                         }
@@ -303,11 +318,12 @@ class ConfigActivity : AppCompatActivity() {
         handleProvisioningFailure("Manual unprovision")
     }
 
-    private fun saveProvisioning(url: String, clientId: String, pollIntervalSecs: Int) {
+    private fun saveProvisioning(url: String, clientId: String, pollIntervalSecs: Int, failOpen: Boolean) {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit(commit = true) {
             putString(KEY_SERVER_URL, url)
             putString(KEY_CLIENT_ID, clientId)
             putInt(KEY_POLL_INTERVAL, pollIntervalSecs)
+            putBoolean(KEY_FAIL_OPEN, failOpen)
         }
         
         updateUI(url, clientId)
@@ -325,6 +341,7 @@ class ConfigActivity : AppCompatActivity() {
             remove(KEY_SERVER_URL)
             remove(KEY_CLIENT_ID)
             remove(KEY_POLL_INTERVAL)
+            remove(KEY_FAIL_OPEN)
         }
         
         stopService(Intent(this, MainService::class.java))
