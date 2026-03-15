@@ -1,4 +1,7 @@
 import os
+import logging
+
+log = logging.getLogger(__name__)
 
 from flask import Flask, g, jsonify, redirect, render_template, request, send_from_directory, url_for
 
@@ -273,7 +276,7 @@ def telegram_test():
         try:
             usage_tracking._telegram_bot.send_message(int(_load_config()["telegram_chat_id"]), "Hi")
         except Exception:
-            pass
+            log.warning("Failed to send Telegram alert", exc_info=True)
     return redirect(url_for("config_page"))
 
 
