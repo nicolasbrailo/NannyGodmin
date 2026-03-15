@@ -151,6 +151,7 @@ def device_detail(device_id):
         screenshot_url=screenshot_url,
         screenshot_time=detail["screenshot_time"],
         daily_hours=detail["daily_hours"],
+        ignored_daily_hours=detail["ignored_daily_hours"],
         daily_slots=detail["daily_slots"],
         slot_hours=detail["slot_hours"],
         app_timeline=detail["app_timeline"],

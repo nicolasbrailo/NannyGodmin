@@ -25,7 +25,11 @@ def configure_alerts(config):
 
 def get_all_devices_with_usage(conn):
     devices = db.get_all_devices(conn)
-    usage_today = {d["id"]: device_timeline.get_today_usage(conn, d["id"]) for d in devices}
+    ignore_re = usage_tracking._usage_ignore_re
+    usage_today = {}
+    for d in devices:
+        active, ignored = device_timeline.get_today_usage_split(conn, d["id"], ignore_re)
+        usage_today[d["id"]] = {"active_mins": active, "ignored_mins": ignored}
     return devices, usage_today
 
 
@@ -180,7 +184,10 @@ def get_device_detail(conn, device_id, screenshots_dir):
         mtime = os.path.getmtime(screenshot_path)
         screenshot_time = datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    transitions, daily_hours = device_timeline.compute_usage_timeline(conn, device_id)
+    ignore_re = usage_tracking._usage_ignore_re
+    transitions, daily_hours, ignored_daily_hours = device_timeline.compute_usage_timeline_filtered(
+        conn, device_id, ignore_re
+    )
     daily_slots, slot_hours = device_timeline.compute_daily_slots(transitions)
     app_timeline = device_timeline.compute_app_timeline(conn, device_id)
 
@@ -190,6 +197,7 @@ def get_device_detail(conn, device_id, screenshots_dir):
         "screenshot_time": screenshot_time,
         "daily_slots": daily_slots,
         "daily_hours": daily_hours,
+        "ignored_daily_hours": ignored_daily_hours,
         "slot_hours": slot_hours,
         "app_timeline": app_timeline,
     }

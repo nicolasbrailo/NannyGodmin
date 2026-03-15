@@ -69,6 +69,117 @@ def get_today_usage(conn, device_id):
     return round(daily_hours.get(today, 0) * 60)
 
 
+def _is_app_ignored(app, ignore_re):
+    return app is not None and ignore_re is not None and ignore_re.search(app)
+
+
+def compute_usage_timeline_filtered(conn, device_id, ignore_re=None):
+    """Like compute_usage_timeline but splits time into active vs ignored based on foreground app.
+
+    Returns (transitions, daily_hours, ignored_daily_hours).
+    When ignore_re is None, ignored_daily_hours is empty and daily_hours matches the original.
+    """
+    rows = db.get_usage_and_app_events(conn, device_id)
+
+    screen_on = False
+    server_locked = False
+    active = False
+    current_app = None
+    transitions = []
+
+    for row in rows:
+        ts = row["timestamp"]
+        action = row["action"]
+        source = row["source"]
+
+        if action == "screen_on":
+            screen_on = True
+        elif action == "screen_off":
+            screen_on = False
+        elif action == "lock" and source == "controller":
+            server_locked = True
+        elif action == "unlock" and source == "controller":
+            server_locked = False
+        elif action == "app_change":
+            args = json.loads(row["args"]) if isinstance(row["args"], str) else row["args"]
+            app = args.get("new_activity", "Unknown") if args else "Unknown"
+            app_name = app.split("/")[0] if "/" in app else app
+            if app_name != "Unknown":
+                current_app = app_name
+            # app_change doesn't affect screen/lock state, check if ignored status changed
+            new_active = screen_on and not server_locked
+            if new_active and ignore_re is not None:
+                ignored = _is_app_ignored(current_app, ignore_re)
+                transitions.append({
+                    "timestamp": ts,
+                    "screen_on": screen_on,
+                    "server_locked": server_locked,
+                    "active": True,
+                    "ignored": ignored,
+                    "app": current_app,
+                })
+            continue
+        else:
+            continue
+
+        new_active = screen_on and not server_locked
+        if new_active != active:
+            active = new_active
+            ignored = _is_app_ignored(current_app, ignore_re) if active else False
+            transitions.append({
+                "timestamp": ts,
+                "screen_on": screen_on,
+                "server_locked": server_locked,
+                "active": active,
+                "ignored": ignored,
+                "app": current_app,
+            })
+
+    # Deduplicate: collapse consecutive transitions with same (active, ignored) state
+    deduped = []
+    for t in transitions:
+        if deduped and deduped[-1]["active"] == t["active"] and deduped[-1].get("ignored") == t.get("ignored"):
+            continue
+        deduped.append(t)
+    transitions = deduped
+
+    daily_hours = defaultdict(float)
+    ignored_daily_hours = defaultdict(float)
+
+    for i, t in enumerate(transitions):
+        if not t["active"]:
+            continue
+        start = datetime.fromisoformat(t["timestamp"])
+        if i + 1 < len(transitions):
+            end = datetime.fromisoformat(transitions[i + 1]["timestamp"])
+        else:
+            end = datetime.now(timezone.utc) if start.tzinfo else datetime.now()
+
+        target = ignored_daily_hours if t.get("ignored") else daily_hours
+
+        cursor = start
+        while cursor < end:
+            day_str = cursor.strftime("%Y-%m-%d")
+            midnight = (cursor + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            segment_end = min(end, midnight)
+            target[day_str] += (segment_end - cursor).total_seconds() / 3600
+            cursor = segment_end
+
+    daily_hours = dict(sorted(daily_hours.items()))
+    ignored_daily_hours = dict(sorted(ignored_daily_hours.items()))
+    return transitions, daily_hours, ignored_daily_hours
+
+
+def get_today_usage_split(conn, device_id, ignore_re=None):
+    """Return (active_mins, ignored_mins) for today."""
+    _, daily_hours, ignored_daily_hours = compute_usage_timeline_filtered(conn, device_id, ignore_re)
+    today = datetime.now().strftime("%Y-%m-%d")
+    return (
+        round(daily_hours.get(today, 0) * 60),
+        round(ignored_daily_hours.get(today, 0) * 60),
+    )
+
+
 def compute_daily_slots(transitions):
     """Convert transitions into per-day 15-minute slot arrays (96 slots per day).
 

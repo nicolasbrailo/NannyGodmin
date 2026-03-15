@@ -123,6 +123,15 @@ def get_usage_events(db, device_id):
     ).fetchall()
 
 
+def get_usage_and_app_events(db, device_id):
+    return db.execute(
+        "SELECT timestamp, action, args, source FROM action_log "
+        "WHERE device_id = ? AND action IN ('screen_on', 'screen_off', 'lock', 'unlock', 'app_change') "
+        "ORDER BY timestamp ASC",
+        (device_id,),
+    ).fetchall()
+
+
 def get_app_and_screen_events(db, device_id):
     return db.execute(
         "SELECT timestamp, action, args FROM action_log "

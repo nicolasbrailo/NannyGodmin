@@ -30,9 +30,7 @@ class RemoteControl(
 
     private val pollTask = object : Runnable {
         override fun run() {
-            Log.d("RemoteControl", "PING")
             if (!isRunning) return
-            Log.d("RemoteControl", "SEND UPD")
             sendReport(JSONObject().apply {
                 put("action", "poll")
             })
@@ -129,7 +127,6 @@ class RemoteControl(
                             consecutiveFailures = 0
                             updateLockState(locked)
                             for (i in 0 until commands.length()) {
-                                Log.d("XXX", "RECV CMD")
                                 handleCommand(commands.getJSONObject(i))
                             }
                         }
@@ -164,7 +161,6 @@ class RemoteControl(
     }
 
     private fun updateLockState(locked: Boolean) {
-        Log.d("XXX", "Server says we should be locked? $locked")
         if (locked != isLocked) {
             isLocked = locked
             if (isLocked) {

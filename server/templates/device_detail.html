@@ -83,21 +83,26 @@
     </section>
 
     <h2>Usage Report</h2>
-    {% if daily_hours %}
+    {% if daily_hours or ignored_daily_hours %}
     <table>
         <tr>
             <th>Day</th>
-            <th>Usage</th>
+            <th>Active</th>
+            {% if ignored_daily_hours %}<th>Ignored</th>{% endif %}
             <th>
                 <div class="slot-header">
                     {% for h in slot_hours %}<span>{{ h }}</span>{% endfor %}
                 </div>
             </th>
         </tr>
-        {% for date, hours in daily_hours.items()|reverse %}
+        {% set all_dates = (daily_hours.keys()|list + ignored_daily_hours.keys()|list)|unique|sort|list %}
+        {% for date in all_dates|reverse %}
+        {% set hours = daily_hours.get(date, 0) %}
+        {% set ignored = ignored_daily_hours.get(date, 0) %}
         <tr>
             <td style="white-space:nowrap">{{ date }}</td>
             <td style="white-space:nowrap;width:80px">{% if hours >= 1 %}{{ "%.1f"|format(hours) }} hrs{% else %}{{ (hours * 60)|round|int }} mins{% endif %}</td>
+            {% if ignored_daily_hours %}<td style="white-space:nowrap;width:80px">{% if ignored >= 1 %}{{ "%.1f"|format(ignored) }} hrs{% elif ignored > 0 %}{{ (ignored * 60)|round|int }} mins{% else %}-{% endif %}</td>{% endif %}
             <td>
                 {% if date in daily_slots %}
                 <div class="slot-bar">
@@ -112,15 +117,20 @@
     <p><em>No usage recorded yet.</em></p>
     {% endif %}
 
-    {% if daily_hours %}
+    {% if daily_hours or ignored_daily_hours %}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dygraph/2.2.1/dygraph.min.css">
     <div id="usage-graph" style="width:100%;height:300px;margin-top:10px;"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dygraph/2.2.1/dygraph.min.js"></script>
     <script>
     (function() {
-        var data = "Date,Hours\n";
-        {% for date, hours in daily_hours.items() %}
-        data += "{{ date }},{{ '%.2f' % hours }}\n";
+        var hasIgnored = {{ 'true' if ignored_daily_hours else 'false' }};
+        var data = hasIgnored ? "Date,Active,Ignored\n" : "Date,Hours\n";
+        {% for date in (daily_hours.keys()|list + ignored_daily_hours.keys()|list)|unique|sort %}
+        {% set hours = daily_hours.get(date, 0) %}
+        {% set ignored = ignored_daily_hours.get(date, 0) %}
+        data += hasIgnored
+            ? "{{ date }},{{ '%.2f' % hours }},{{ '%.2f' % ignored }}\n"
+            : "{{ date }},{{ '%.2f' % hours }}\n";
         {% endfor %}
         new Dygraph(document.getElementById("usage-graph"), data, {
             ylabel: "Hours",
@@ -128,7 +138,7 @@
             strokeWidth: 2,
             pointSize: 4,
             fillGraph: true,
-            colors: ["#3498db"],
+            colors: hasIgnored ? ["#3498db", "#95a5a6"] : ["#3498db"],
             axes: { y: { valueRange: [0, null] } }
         });
     })();

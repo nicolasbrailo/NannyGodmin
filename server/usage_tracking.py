@@ -71,7 +71,7 @@ def reset_triggered(device_id):
 def _seed_tracker(conn, device_id):
     """Build tracker state from existing data (one-time cost per device after restart)."""
     today = datetime.now().strftime("%Y-%m-%d")
-    usage_mins = device_timeline.get_today_usage(conn, device_id)
+    usage_mins, _ = device_timeline.get_today_usage_split(conn, device_id, _usage_ignore_re)
 
     dev = db.get_device(conn, device_id)
     server_locked = bool(dev["locked"])
