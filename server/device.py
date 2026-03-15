@@ -20,6 +20,19 @@ _relock_timer = None
 _relock_at = None
 
 
+def _staleness_cap(conn, device_id):
+    """Compute a now-cap for timeline functions if the device is stale."""
+    staleness = usage_tracking.get_staleness_secs()
+    if not staleness:
+        return None
+    last_ts = db.get_last_report_time(conn, device_id)
+    if not last_ts:
+        return None
+    last_report = datetime.fromisoformat(last_ts)
+    cap = last_report + timedelta(seconds=staleness)
+    return cap if cap < datetime.now() else None
+
+
 def configure_alerts(config):
     usage_tracking.configure(config)
 
@@ -29,7 +42,8 @@ def get_all_devices_with_usage(conn):
     ignore_re = usage_tracking._usage_ignore_re
     usage_today = {}
     for d in devices:
-        active, ignored = device_timeline.get_today_usage_split(conn, d["id"], ignore_re)
+        cap = _staleness_cap(conn, d["id"])
+        active, ignored = device_timeline.get_today_usage_split(conn, d["id"], ignore_re, now_cap=cap)
         usage_today[d["id"]] = {"active_mins": active, "ignored_mins": ignored}
     groups = db.get_all_device_groups(conn)
     groups_by_id = {g["id"]: g for g in groups}
@@ -188,11 +202,12 @@ def get_device_detail(conn, device_id, screenshots_dir):
         screenshot_time = datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     ignore_re = usage_tracking._usage_ignore_re
+    cap = _staleness_cap(conn, device_id)
     transitions, daily_hours, ignored_daily_hours = device_timeline.compute_usage_timeline_filtered(
-        conn, device_id, ignore_re
+        conn, device_id, ignore_re, now_cap=cap
     )
-    daily_slots, slot_hours = device_timeline.compute_daily_slots(transitions)
-    app_timeline = device_timeline.compute_app_timeline(conn, device_id)
+    daily_slots, slot_hours = device_timeline.compute_daily_slots(transitions, now_cap=cap)
+    app_timeline = device_timeline.compute_app_timeline(conn, device_id, now_cap=cap)
 
     return {
         "device": device_row,
@@ -212,7 +227,8 @@ def get_device_debug(conn, device_id):
         raise DeviceNotFound("unknown device")
 
     logs = db.get_device_logs(conn, device_id)
-    transitions, _ = device_timeline.compute_usage_timeline(conn, device_id)
+    cap = _staleness_cap(conn, device_id)
+    transitions, _ = device_timeline.compute_usage_timeline(conn, device_id, now_cap=cap)
 
     return {
         "device": device_row,
@@ -235,7 +251,8 @@ def get_all_groups_with_usage(conn):
         devices = db.get_devices_in_group(conn, g["id"])
         total_mins = 0
         for d in devices:
-            active, _ = device_timeline.get_today_usage_split(conn, d["id"], ignore_re)
+            cap = _staleness_cap(conn, d["id"])
+            active, _ = device_timeline.get_today_usage_split(conn, d["id"], ignore_re, now_cap=cap)
             total_mins += active
         result.append({
             "group": g,
@@ -289,7 +306,8 @@ def get_group_detail(conn, group_id):
     total_mins = 0
     device_usage = {}
     for d in devices:
-        active, ignored = device_timeline.get_today_usage_split(conn, d["id"], ignore_re)
+        cap = _staleness_cap(conn, d["id"])
+        active, ignored = device_timeline.get_today_usage_split(conn, d["id"], ignore_re, now_cap=cap)
         device_usage[d["id"]] = {"active_mins": active, "ignored_mins": ignored}
         total_mins += active
     return {

@@ -223,7 +223,7 @@ class RemoteControl(
                 val url = command.optString("url", "")
                 if (url.isEmpty()) {
                     Log.w("RemoteControl", "App received apk update request, but no URL")
-                    return;
+                    return
                 }
                 Log.i("RemoteControl", "App update notify received: $url")
                 val intent = Intent(context, ConfigActivity::class.java).apply {

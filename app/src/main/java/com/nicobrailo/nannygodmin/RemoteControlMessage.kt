@@ -94,7 +94,7 @@ class RemoteControlMessage(private val context: Context, private val handler: Ha
             val removeViewRunnable = Runnable {
                 try {
                     windowManager.removeView(textView)
-                } catch (e: Exception) { /* already removed */ }
+                } catch (_: Exception) { /* already removed */ }
             }
 
             // Auto-remove the overlay after timeout

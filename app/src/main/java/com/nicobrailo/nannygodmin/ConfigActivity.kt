@@ -35,43 +35,37 @@ class ConfigActivity : AppCompatActivity() {
     )
 
     companion object {
-        const val EXTRA_FORCE_REPROVISION = "EXTRA_FORCE_REPROVISION"
-        const val EXTRA_UPDATE_URL = "EXTRA_UPDATE_URL"
-        private const val TAG = "ConfigActivity"
-        private const val PREFS_NAME = "prefs"
-        private const val KEY_SERVER_URL = "server_url"
-        private const val KEY_CLIENT_ID = "client_id"
-        private const val KEY_POLL_INTERVAL = "poll_interval_secs"
-        private const val KEY_FAIL_OPEN = "fail_open"
+        const val PREFS_NAME = "NannyGodminPrefs"
+        const val KEY_SERVER_URL = "server_url"
+        const val KEY_CLIENT_ID = "client_id"
+        const val KEY_POLL_INTERVAL = "poll_interval_secs"
+        const val KEY_FAIL_OPEN = "fail_open"
+        const val EXTRA_FORCE_REPROVISION = "force_reprovision"
+        const val EXTRA_UPDATE_URL = "update_url"
+        const val TAG = "NannyGodmin"
 
         fun getSettings(context: Context): ProvisioningSettings? {
             val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             val url = prefs.getString(KEY_SERVER_URL, null)
             val id = prefs.getString(KEY_CLIENT_ID, null)
-            val interval = prefs.getInt(KEY_POLL_INTERVAL, 10)
-            val failOpen = prefs.getBoolean(KEY_FAIL_OPEN, false)
-            return if (url != null && id != null) {
-                ProvisioningSettings(url, id, interval, failOpen)
-            } else {
-                null
-            }
-        }
-
-        fun updateConfig(context: Context, pollIntervalSecs: Int, failOpen: Boolean) {
-            Log.i(TAG, "Updating config: pollIntervalSecs=$pollIntervalSecs, failOpen=$failOpen")
-            context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit(commit = true) {
-                putInt(KEY_POLL_INTERVAL, pollIntervalSecs)
-                putBoolean(KEY_FAIL_OPEN, failOpen)
-            }
-            
-            // Restart the service to apply new settings (especially poll interval)
-            val intent = Intent(context, MainService::class.java)
-            context.startForegroundService(intent)
+            if (url == null || id == null) return null
+            return ProvisioningSettings(
+                url, id,
+                prefs.getInt(KEY_POLL_INTERVAL, 10),
+                prefs.getBoolean(KEY_FAIL_OPEN, false)
+            )
         }
 
         fun clearClientId(context: Context) {
-            context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit(commit = true) {
+            context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit {
                 remove(KEY_CLIENT_ID)
+            }
+        }
+
+        fun updateConfig(context: Context, pollInterval: Int, failOpen: Boolean) {
+            context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit {
+                putInt(KEY_POLL_INTERVAL, pollInterval)
+                putBoolean(KEY_FAIL_OPEN, failOpen)
             }
         }
     }
@@ -79,6 +73,7 @@ class ConfigActivity : AppCompatActivity() {
     private lateinit var statusWarning: TextView
     private lateinit var urlStatus: TextView
     private lateinit var clientIdStatus: TextView
+    private lateinit var buildTimeView: TextView
     private lateinit var urlInput: EditText
     private lateinit var btnSaveUrl: Button
     private lateinit var btnUnprovision: Button
@@ -97,10 +92,10 @@ class ConfigActivity : AppCompatActivity() {
         val forceReprovision = intent.getBooleanExtra(EXTRA_FORCE_REPROVISION, false)
         if (forceReprovision) {
             Log.i(TAG, "Forced re-provisioning requested, clearing client_id")
-            ConfigActivity.clearClientId(this)
+            clearClientId(this)
         }
 
-        val settings = ConfigActivity.getSettings(this)
+        val settings = getSettings(this)
         val currentUrl = settings?.serverUrl ?: getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(KEY_SERVER_URL, "") ?: ""
         val currentClientId = settings?.clientId ?: ""
 
@@ -115,6 +110,12 @@ class ConfigActivity : AppCompatActivity() {
 
         clientIdStatus = TextView(this).apply {
             setPadding(0, 0, 0, 20)
+        }
+
+        buildTimeView = TextView(this).apply {
+            textSize = 12f
+            setTextColor(Color.GRAY)
+            setPadding(0, 20, 0, 0)
         }
 
         urlInput = EditText(this).apply {
@@ -134,7 +135,7 @@ class ConfigActivity : AppCompatActivity() {
         }
 
         btnUpdate = Button(this).apply {
-            text = "Download App Update"
+            text = getString(R.string.download_app_update)
             visibility = View.GONE
             setBackgroundColor(Color.BLUE)
             setTextColor(Color.WHITE)
@@ -148,6 +149,7 @@ class ConfigActivity : AppCompatActivity() {
         layout.addView(statusWarning)
         layout.addView(urlStatus)
         layout.addView(clientIdStatus)
+        layout.addView(buildTimeView)
         layout.addView(urlInput)
         layout.addView(btnSaveUrl)
         layout.addView(btnUnprovision)
@@ -203,7 +205,7 @@ class ConfigActivity : AppCompatActivity() {
                     val browserIntent = Intent(Intent.ACTION_VIEW, updateUrl.toUri())
                     startActivity(browserIntent)
                 } catch (_: Exception) {
-                    Toast.makeText(this, "Failed to open update URL", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.failed_to_open_update_url), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -261,13 +263,12 @@ class ConfigActivity : AppCompatActivity() {
     }
 
     private fun isUsageStatsPermissionGranted(): Boolean {
-        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
-        }
+        val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            packageName
+        )
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
@@ -290,6 +291,9 @@ class ConfigActivity : AppCompatActivity() {
         // Update ClientID Label
         val displayId = clientId.ifEmpty { getString(R.string.godmin_url_not_set) }
         clientIdStatus.text = getString(R.string.client_id_status, displayId)
+
+        // Update Build Time
+        buildTimeView.text = getString(R.string.build_time, BuildConfig.BUILD_TIME)
 
         // Update Buttons
         btnSaveUrl.isEnabled = !isProvisioned

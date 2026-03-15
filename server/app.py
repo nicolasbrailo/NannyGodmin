@@ -54,6 +54,7 @@ def _provision_config(config):
 
 def _alert_config(config):
     return {
+        "poll_interval_secs": config["poll_interval_secs"],
         "daily_limit_mins": config["daily_limit_mins"],
         "auto_lock": config["auto_lock"],
         "warning_enabled": config["warning_enabled"],

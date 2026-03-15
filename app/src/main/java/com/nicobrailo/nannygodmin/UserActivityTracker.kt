@@ -37,8 +37,6 @@ class UserActivityTracker(context: Context, private val onActivityChanged: (Stri
         handler.removeCallbacks(pollTask)
     }
 
-    fun getCurrentActivity(): String = lastActivity
-
     private fun getForegroundActivityName(): String {
         var currentActivity = "Unknown"
         val time = System.currentTimeMillis()

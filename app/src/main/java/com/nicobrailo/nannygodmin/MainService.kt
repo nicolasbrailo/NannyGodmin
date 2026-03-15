@@ -71,7 +71,7 @@ class MainService : Service() {
         // Directly passing the settings object to RemoteControl
         remoteControl = RemoteControl(this, settings) {
             // Callback for 401 unauthorized / unprovisioned
-            Log.w("MainService", "RemoteControl reported unauth, triggering re-provisioning...")
+            Log.w("MainService", "RemoteControl reported unauthorized, triggering re-provisioning...")
             
             // Delegate clearing state to ConfigActivity
             ConfigActivity.clearClientId(this)

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import db
 
 
-def compute_usage_timeline(conn, device_id):
+def compute_usage_timeline(conn, device_id, now_cap=None):
     """Compute active/inactive transitions and daily usage hours from screen/lock events."""
     rows = db.get_usage_events(conn, device_id)
 
@@ -47,6 +47,8 @@ def compute_usage_timeline(conn, device_id):
         start = datetime.fromisoformat(t["timestamp"])
         if i + 1 < len(transitions):
             end = datetime.fromisoformat(transitions[i + 1]["timestamp"])
+        elif now_cap is not None:
+            end = now_cap
         else:
             end = datetime.now(timezone.utc) if start.tzinfo else datetime.now()
 
@@ -62,9 +64,9 @@ def compute_usage_timeline(conn, device_id):
     return transitions, daily_hours
 
 
-def get_today_usage(conn, device_id):
+def get_today_usage(conn, device_id, now_cap=None):
     """Return today's usage in minutes for a single device."""
-    _, daily_hours = compute_usage_timeline(conn, device_id)
+    _, daily_hours = compute_usage_timeline(conn, device_id, now_cap=now_cap)
     today = datetime.now().strftime("%Y-%m-%d")
     return round(daily_hours.get(today, 0) * 60)
 
@@ -73,7 +75,7 @@ def _is_app_ignored(app, ignore_re):
     return app is not None and ignore_re is not None and ignore_re.search(app)
 
 
-def compute_usage_timeline_filtered(conn, device_id, ignore_re=None):
+def compute_usage_timeline_filtered(conn, device_id, ignore_re=None, now_cap=None):
     """Like compute_usage_timeline but splits time into active vs ignored based on foreground app.
 
     Returns (transitions, daily_hours, ignored_daily_hours).
@@ -152,6 +154,8 @@ def compute_usage_timeline_filtered(conn, device_id, ignore_re=None):
         start = datetime.fromisoformat(t["timestamp"])
         if i + 1 < len(transitions):
             end = datetime.fromisoformat(transitions[i + 1]["timestamp"])
+        elif now_cap is not None:
+            end = now_cap
         else:
             end = datetime.now(timezone.utc) if start.tzinfo else datetime.now()
 
@@ -170,9 +174,9 @@ def compute_usage_timeline_filtered(conn, device_id, ignore_re=None):
     return transitions, daily_hours, ignored_daily_hours
 
 
-def get_today_usage_split(conn, device_id, ignore_re=None):
+def get_today_usage_split(conn, device_id, ignore_re=None, now_cap=None):
     """Return (active_mins, ignored_mins) for today."""
-    _, daily_hours, ignored_daily_hours = compute_usage_timeline_filtered(conn, device_id, ignore_re)
+    _, daily_hours, ignored_daily_hours = compute_usage_timeline_filtered(conn, device_id, ignore_re, now_cap=now_cap)
     today = datetime.now().strftime("%Y-%m-%d")
     return (
         round(daily_hours.get(today, 0) * 60),
@@ -180,7 +184,7 @@ def get_today_usage_split(conn, device_id, ignore_re=None):
     )
 
 
-def compute_daily_slots(transitions):
+def compute_daily_slots(transitions, now_cap=None):
     """Convert transitions into per-day 15-minute slot arrays (96 slots per day).
 
     Returns (daily_slots, slot_hours) where daily_slots is trimmed to the
@@ -196,6 +200,8 @@ def compute_daily_slots(transitions):
         start = datetime.fromisoformat(t["timestamp"])
         if i + 1 < len(transitions):
             end = datetime.fromisoformat(transitions[i + 1]["timestamp"])
+        elif now_cap is not None:
+            end = now_cap
         else:
             end = datetime.now(timezone.utc) if start.tzinfo else datetime.now()
         intervals.append((start, end))
@@ -249,7 +255,7 @@ def compute_daily_slots(transitions):
     return daily_slots, slot_hours
 
 
-def compute_app_timeline(conn, device_id):
+def compute_app_timeline(conn, device_id, now_cap=None):
     """Build a timeline of foreground app usage from app_change and screen events.
 
     Returns list of dicts: {app, start, end, duration_secs}.
@@ -316,8 +322,11 @@ def compute_app_timeline(conn, device_id):
 
     # Close the last open span (device still on)
     if current_app and current_start:
-        now = datetime.now(timezone.utc) if current_start.tzinfo else datetime.now()
-        raw.append({"app": current_app, "start": current_start, "end": now})
+        if now_cap is not None:
+            end = now_cap
+        else:
+            end = datetime.now(timezone.utc) if current_start.tzinfo else datetime.now()
+        raw.append({"app": current_app, "start": current_start, "end": end})
 
     if not raw:
         return []

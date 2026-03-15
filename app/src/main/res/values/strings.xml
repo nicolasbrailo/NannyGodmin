@@ -26,4 +26,5 @@
     <string name="unknown_error">Unknown error</string>
     <string name="download_app_update">Download App Update</string>
     <string name="failed_to_open_update_url">Failed to open update URL</string>
+    <string name="build_time">Build Time: %1$s</string>
 </resources>

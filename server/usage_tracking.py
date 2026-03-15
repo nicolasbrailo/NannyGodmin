@@ -1,7 +1,7 @@
 import logging
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import db
 import device_timeline
@@ -30,6 +30,14 @@ _group_state = {}  # group_id -> {"triggered": bool, "warned": bool, "auto_locke
 
 def _is_app_ignored(app):
     return app is not None and _usage_ignore_re is not None and _usage_ignore_re.search(app)
+
+
+def get_staleness_secs():
+    """Return the staleness timeout: 4x the poll interval. None if unconfigured."""
+    poll = _alert_config.get("poll_interval_secs")
+    if poll:
+        return poll * 4
+    return None
 
 
 def configure(config):
@@ -78,8 +86,18 @@ def reset_triggered(device_id):
 
 def _seed_tracker(conn, device_id):
     """Build tracker state from existing data (one-time cost per device after restart)."""
-    today = datetime.now().strftime("%Y-%m-%d")
-    usage_mins, _ = device_timeline.get_today_usage_split(conn, device_id, _usage_ignore_re)
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+
+    # Determine if the device is stale (hasn't reported recently)
+    staleness = get_staleness_secs()
+    last_report_str = db.get_last_report_time(conn, device_id)
+    last_report = datetime.fromisoformat(last_report_str) if last_report_str else now
+    stale = staleness and (now - last_report).total_seconds() > staleness
+
+    # Cap timeline computation so it doesn't extend to now for stale devices
+    now_cap = (last_report + timedelta(seconds=staleness)) if stale else None
+    usage_mins, _ = device_timeline.get_today_usage_split(conn, device_id, _usage_ignore_re, now_cap=now_cap)
 
     dev = db.get_device(conn, device_id)
     server_locked = bool(dev["locked"])
@@ -87,13 +105,12 @@ def _seed_tracker(conn, device_id):
     current_app = db.get_current_foreground_app(conn, device_id)
     active = screen_on and not server_locked
     counting = active and not _is_app_ignored(current_app)
-    now = datetime.now()
 
     tracker = {
         "date": today,
         "accumulated_secs": usage_mins * 60,
-        "counting_since": now if counting else None,
-        "active": active,
+        "counting_since": now if (counting and not stale) else None,
+        "active": active and not stale,
         "screen_on": screen_on,
         "server_locked": server_locked,
         "current_app": current_app,
@@ -101,6 +118,7 @@ def _seed_tracker(conn, device_id):
         "warned": False,
         "auto_locked": False,
         "group_id": dev["group_id"],
+        "last_report_time": last_report,
     }
     _usage_trackers[device_id] = tracker
     return tracker
@@ -162,13 +180,19 @@ def _get_group_state(group_id, today):
 
 def _get_group_usage_secs(group_id, now):
     """Sum accumulated usage across all trackers belonging to a group."""
+    staleness = get_staleness_secs()
     total = 0
     for tracker in _usage_trackers.values():
         if tracker.get("group_id") != group_id:
             continue
         total += tracker["accumulated_secs"]
         if tracker["counting_since"]:
-            total += (now - tracker["counting_since"]).total_seconds()
+            last_report = tracker.get("last_report_time")
+            if staleness and last_report and (now - last_report).total_seconds() > staleness:
+                # Device is stale — only count up to last report time
+                total += max(0, (last_report - tracker["counting_since"]).total_seconds())
+            else:
+                total += (now - tracker["counting_since"]).total_seconds()
     return total
 
 
@@ -202,6 +226,16 @@ def check_usage(conn, device_id, device_name, action, extra_args=None):
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
     group_id = tracker.get("group_id")
+
+    # Flush stale counting — if device was silent longer than the staleness
+    # window, only credit usage up to last_report_time (not all the way to now)
+    staleness = get_staleness_secs()
+    if staleness and tracker["counting_since"] and tracker.get("last_report_time"):
+        silence = (now - tracker["last_report_time"]).total_seconds()
+        if silence > staleness:
+            tracker["accumulated_secs"] += (tracker["last_report_time"] - tracker["counting_since"]).total_seconds()
+            tracker["counting_since"] = now
+    tracker["last_report_time"] = now
 
     # Day rollover — reset tracker, unlock device
     if tracker["date"] != today:

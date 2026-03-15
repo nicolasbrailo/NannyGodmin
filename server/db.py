@@ -177,6 +177,15 @@ def get_current_screen_state(db, device_id):
     return row["action"] == "screen_on" if row else False
 
 
+def get_last_report_time(db, device_id):
+    """Get the timestamp of the last action_log entry for a device."""
+    row = db.execute(
+        "SELECT MAX(timestamp) as last_ts FROM action_log WHERE device_id = ?",
+        (device_id,),
+    ).fetchone()
+    return row["last_ts"] if row and row["last_ts"] else None
+
+
 def clear_action_log(db, device_id):
     db.execute("DELETE FROM action_log WHERE device_id = ?", (device_id,))
     db.commit()

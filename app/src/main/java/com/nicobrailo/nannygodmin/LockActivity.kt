@@ -92,7 +92,7 @@ class LockActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
         if (pm.isInteractive) {
             Log.i(TAG, "Activity pausing while screen is ON, attempting to stay in front")
             try {
