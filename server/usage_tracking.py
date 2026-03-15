@@ -203,21 +203,14 @@ def check_usage(conn, device_id, device_name, action, extra_args=None):
     today = now.strftime("%Y-%m-%d")
     group_id = tracker.get("group_id")
 
-    # Day rollover — reset tracker, unlock if auto-locked
+    # Day rollover — reset tracker, unlock device
     if tracker["date"] != today:
         if group_id:
-            # Group-level day rollover: unlock all group members if group was auto-locked
-            gs = _get_group_state(group_id, today)  # resets group state for new day
-            if tracker["auto_locked"]:
-                # Each device handles its own unlock on rollover
-                db.set_device_locked(conn, device_id, False)
-                db.insert_action_log(conn, device_id, "unlock", {"reason": "daily_reset"}, "controller")
-                tracker["server_locked"] = False
-        else:
-            if tracker["auto_locked"]:
-                db.set_device_locked(conn, device_id, False)
-                db.insert_action_log(conn, device_id, "unlock", {"reason": "daily_reset"}, "controller")
-                tracker["server_locked"] = False
+            _get_group_state(group_id, today)  # resets group state for new day
+        if tracker["server_locked"]:
+            db.set_device_locked(conn, device_id, False)
+            db.insert_action_log(conn, device_id, "unlock", {"reason": "daily_reset"}, "controller")
+            tracker["server_locked"] = False
         tracker["date"] = today
         tracker["accumulated_secs"] = 0
         tracker["triggered"] = False
