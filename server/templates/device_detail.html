@@ -88,7 +88,7 @@
         <tr>
             <th>Day</th>
             <th>Active</th>
-            {% if ignored_daily_hours %}<th>Ignored</th>{% endif %}
+            {% if ignored_daily_hours %}<th title="Time spent in apps matching the usage ignore regex — not counted towards the daily limit">Ignored</th>{% endif %}
             <th>
                 <div class="slot-header">
                     {% for h in slot_hours %}<span>{{ h }}</span>{% endfor %}

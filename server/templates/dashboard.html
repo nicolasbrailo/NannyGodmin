@@ -62,9 +62,8 @@
         <mark class="unlocked">UNLOCKED</mark>
         {% endif %}
         <strong>{{ device.alias or device.name }}</strong>
-        {% set u = usage_today[device.id] %}
-        {% set mins = u.active_mins %}
-        <small>Usage: {% if mins >= 60 %}{{ "%.1f"|format(mins / 60) }} hrs{% else %}{{ mins }} mins{% endif %}{% if u.ignored_mins %} <span title="Time in ignored apps">(+{{ u.ignored_mins }} ignored)</span>{% endif %}</small>
+        {% set mins = usage_today[device.id].active_mins %}
+        <small>Usage: {% if mins >= 60 %}{{ "%.1f"|format(mins / 60) }} hrs{% else %}{{ mins }} mins{% endif %}</small>
         <nav>
         </nav>
         <form action="{{ url_for('send_command', device_id=device.id) }}" method="post" style="display:flex;align-items:center;gap:6px;">
