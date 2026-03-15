@@ -151,6 +151,14 @@ def bulk_command(conn, action, duration_mins=None):
     return _relock_at
 
 
+def push_app_update(conn, url):
+    devices = db.get_all_devices(conn)
+    cmd = {"name": "app_update_notify", "url": url}
+    for d in devices:
+        db.replace_pending_command(conn, d["id"], "app_update_notify", cmd)
+    conn.commit()
+
+
 def push_provisioning_config(conn, provision_config):
     devices = db.get_all_devices(conn)
     cmd = {"name": "provisioning_config", **provision_config}

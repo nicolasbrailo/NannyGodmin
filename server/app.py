@@ -258,6 +258,14 @@ def config_save():
     return redirect(url_for("config_page"))
 
 
+@app.route("/config/app_update", methods=["POST"])
+def app_update():
+    url = request.form.get("url", "").strip()
+    if url:
+        device.push_app_update(get_db(), url)
+    return redirect(url_for("config_page"))
+
+
 @app.route("/config/telegram_test", methods=["POST"])
 def telegram_test():
     import usage_tracking

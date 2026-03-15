@@ -65,6 +65,19 @@
         </div>
     </form>
 
+    <h2>Request app update</h2>
+    <form action="{{ url_for('app_update') }}" method="post">
+        <table class="config-table">
+            <tr>
+                <td>APK URL</td>
+                <td><input type="text" name="url" placeholder="https://example.com/app.apk"></td>
+            </tr>
+        </table>
+        <div style="margin-top:8px">
+            <button type="submit" class="btn-details">Send update to all devices</button>
+        </div>
+    </form>
+
     {% if config.telegram_bot_token and config.telegram_chat_id %}
     <form action="{{ url_for('telegram_test') }}" method="post" style="margin-top:8px">
         <button type="submit" class="btn-details">Send test Telegram message</button>
