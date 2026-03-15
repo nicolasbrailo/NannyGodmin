@@ -1,5 +1,6 @@
 package com.nicobrailo.nannygodmin
 
+import android.annotation.SuppressLint
 import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
@@ -201,7 +202,7 @@ class ConfigActivity : AppCompatActivity() {
                 try {
                     val browserIntent = Intent(Intent.ACTION_VIEW, updateUrl.toUri())
                     startActivity(browserIntent)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     Toast.makeText(this, "Failed to open update URL", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -295,6 +296,7 @@ class ConfigActivity : AppCompatActivity() {
         btnUnprovision.isEnabled = isProvisioned
     }
 
+    @SuppressLint("HardwareIds")
     private fun provisionDevice(newUrl: String) {
         val deviceName = Settings.Global.getString(contentResolver, "device_name")
             ?: Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)

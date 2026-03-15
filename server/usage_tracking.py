@@ -77,13 +77,15 @@ def _seed_tracker(conn, device_id):
     server_locked = bool(dev["locked"])
     screen_on = db.get_current_screen_state(conn, device_id)
     current_app = db.get_current_foreground_app(conn, device_id)
-    active = screen_on and not server_locked and not _is_app_ignored(current_app)
+    active = screen_on and not server_locked
+    counting = active and not _is_app_ignored(current_app)
     now = datetime.now()
 
     tracker = {
         "date": today,
         "accumulated_secs": usage_mins * 60,
-        "active_since": now if active else None,
+        "counting_since": now if counting else None,
+        "active": active,
         "screen_on": screen_on,
         "server_locked": server_locked,
         "current_app": current_app,
@@ -146,8 +148,8 @@ def check_usage(conn, device_id, device_name, action, extra_args=None):
         tracker["triggered"] = False
         tracker["warned"] = False
         tracker["auto_locked"] = False
-        if tracker["active_since"]:
-            tracker["active_since"] = now
+        if tracker["counting_since"]:
+            tracker["counting_since"] = now
 
     # Update screen state from device-reported events
     if action == "screen_on":
@@ -160,20 +162,24 @@ def check_usage(conn, device_id, device_name, action, extra_args=None):
         if app_name != "Unknown":
             tracker["current_app"] = app_name
 
-    # Recompute active state
-    new_active = tracker["screen_on"] and not tracker["server_locked"] and not _is_app_ignored(tracker.get("current_app"))
-    was_active = tracker["active_since"] is not None
+    # Recompute active state (screen on + not locked) — determines lock behavior
+    new_active = tracker["screen_on"] and not tracker["server_locked"]
+    tracker["active"] = new_active
 
-    if was_active and not new_active:
-        tracker["accumulated_secs"] += (now - tracker["active_since"]).total_seconds()
-        tracker["active_since"] = None
-    elif not was_active and new_active:
-        tracker["active_since"] = now
+    # Recompute counting state (active + app not ignored) — determines usage accumulation
+    new_counting = new_active and not _is_app_ignored(tracker.get("current_app"))
+    was_counting = tracker["counting_since"] is not None
+
+    if was_counting and not new_counting:
+        tracker["accumulated_secs"] += (now - tracker["counting_since"]).total_seconds()
+        tracker["counting_since"] = None
+    elif not was_counting and new_counting:
+        tracker["counting_since"] = now
 
     # Compute current usage
     current_secs = tracker["accumulated_secs"]
-    if tracker["active_since"]:
-        current_secs += (now - tracker["active_since"]).total_seconds()
+    if tracker["counting_since"]:
+        current_secs += (now - tracker["counting_since"]).total_seconds()
     current_mins = current_secs / 60
 
     locked = None
@@ -203,9 +209,10 @@ def check_usage(conn, device_id, device_name, action, extra_args=None):
             db.insert_action_log(conn, device_id, "lock", {"reason": "usage_threshold"}, "controller")
             tracker["auto_locked"] = True
             tracker["server_locked"] = True
-            if tracker["active_since"]:
-                tracker["accumulated_secs"] += (now - tracker["active_since"]).total_seconds()
-                tracker["active_since"] = None
+            tracker["active"] = False
+            if tracker["counting_since"]:
+                tracker["accumulated_secs"] += (now - tracker["counting_since"]).total_seconds()
+                tracker["counting_since"] = None
             locked = True
 
     return locked
@@ -224,10 +231,12 @@ def update_lock(device_id, locked):
     tracker["server_locked"] = locked
 
     new_active = tracker["screen_on"] and not tracker["server_locked"]
-    was_active = tracker["active_since"] is not None
+    tracker["active"] = new_active
+    new_counting = new_active and not _is_app_ignored(tracker.get("current_app"))
+    was_counting = tracker["counting_since"] is not None
 
-    if was_active and not new_active:
-        tracker["accumulated_secs"] += (now - tracker["active_since"]).total_seconds()
-        tracker["active_since"] = None
-    elif not was_active and new_active:
-        tracker["active_since"] = now
+    if was_counting and not new_counting:
+        tracker["accumulated_secs"] += (now - tracker["counting_since"]).total_seconds()
+        tracker["counting_since"] = None
+    elif not was_counting and new_counting:
+        tracker["counting_since"] = now
