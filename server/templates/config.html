@@ -13,38 +13,48 @@
 
     <form action="{{ url_for('config_save') }}" method="post">
         <h2>Provisioning</h2>
-        <label>
-            Poll interval (seconds)
-            <input type="number" name="poll_interval_secs" value="{{ config.poll_interval_secs }}" min="1">
-        </label>
+        <table class="config-table">
+            <tr>
+                <td>Poll interval (seconds)</td>
+                <td><input type="number" name="poll_interval_secs" value="{{ config.poll_interval_secs }}" min="1"></td>
+            </tr>
+            <tr>
+                <td>Fail open</td>
+                <td><label><input type="checkbox" name="fail_open" {{ 'checked' if config.fail_open }}> Allow device usage when server is unreachable</label></td>
+            </tr>
+        </table>
 
         <h2>Usage Alerts</h2>
-        <label>
-            Daily usage limit (minutes, blank to disable)
-            <input type="number" name="daily_limit_mins" value="{{ config.daily_limit_mins if config.daily_limit_mins is not none else '' }}" min="1">
-        </label>
-        <label>
-            <input type="checkbox" name="auto_lock" {{ 'checked' if config.auto_lock }}>
-            Auto-lock devices when limit is reached
-        </label>
-        <label>
-            <input type="checkbox" name="warning_enabled" {{ 'checked' if config.warning_enabled }}>
-            Send warning notification before limit
-        </label>
-        <label>
-            Warning lead time (minutes)
-            <input type="number" name="warning_mins" value="{{ config.warning_mins }}" min="1">
-        </label>
+        <table class="config-table">
+            <tr>
+                <td>Daily usage limit (minutes)</td>
+                <td><input type="number" name="daily_limit_mins" value="{{ config.daily_limit_mins if config.daily_limit_mins is not none else '' }}" min="1" placeholder="blank to disable"></td>
+            </tr>
+            <tr>
+                <td>Auto-lock</td>
+                <td><label><input type="checkbox" name="auto_lock" {{ 'checked' if config.auto_lock }}> Lock devices when limit is reached</label></td>
+            </tr>
+            <tr>
+                <td>Warning notification</td>
+                <td><label><input type="checkbox" name="warning_enabled" {{ 'checked' if config.warning_enabled }}> Send warning before limit</label></td>
+            </tr>
+            <tr>
+                <td>Warning lead time (minutes)</td>
+                <td><input type="number" name="warning_mins" value="{{ config.warning_mins }}" min="1"></td>
+            </tr>
+        </table>
 
         <h2>Telegram Notifications</h2>
-        <label>
-            Bot token
-            <input type="text" name="telegram_bot_token" value="{{ config.telegram_bot_token or '' }}" placeholder="123456:ABC-DEF...">
-        </label>
-        <label>
-            Chat ID
-            <input type="text" name="telegram_chat_id" value="{{ config.telegram_chat_id or '' }}" placeholder="e.g. 123456789">
-        </label>
+        <table class="config-table">
+            <tr>
+                <td>Bot token</td>
+                <td><input type="text" name="telegram_bot_token" value="{{ config.telegram_bot_token or '' }}" placeholder="123456:ABC-DEF..."></td>
+            </tr>
+            <tr>
+                <td>Chat ID</td>
+                <td><input type="text" name="telegram_chat_id" value="{{ config.telegram_chat_id or '' }}" placeholder="e.g. 123456789"></td>
+            </tr>
+        </table>
 
         <div style="margin-top:16px">
             <button type="submit" class="btn-details">Save</button>

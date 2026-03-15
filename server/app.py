@@ -26,6 +26,7 @@ CONFIG_DEFAULTS = {
     "poll_interval_secs": 5,
     "daily_limit_mins": 120,
     "auto_lock": False,
+    "fail_open": False,
     "warning_enabled": False,
     "warning_mins": 5,
     "telegram_bot_token": None,
@@ -44,7 +45,7 @@ def _load_config():
 
 
 def _provision_config(config):
-    return {"poll_interval_secs": config["poll_interval_secs"]}
+    return {"poll_interval_secs": config["poll_interval_secs"], "fail_open": config["fail_open"]}
 
 
 def _alert_config(config):
@@ -230,6 +231,9 @@ def config_save():
     auto_lock = request.form.get("auto_lock")
     db.set_config(conn, "auto_lock", auto_lock == "on")
 
+    fail_open = request.form.get("fail_open")
+    db.set_config(conn, "fail_open", fail_open == "on")
+
     warning_enabled = request.form.get("warning_enabled")
     db.set_config(conn, "warning_enabled", warning_enabled == "on")
 
@@ -243,7 +247,9 @@ def config_save():
     telegram_chat_id = request.form.get("telegram_chat_id", "").strip()
     db.set_config(conn, "telegram_chat_id", telegram_chat_id or None)
 
-    device.configure_alerts(_alert_config(_load_config()))
+    config = _load_config()
+    device.configure_alerts(_alert_config(config))
+    device.push_provisioning_config(conn, _provision_config(config))
     return redirect(url_for("config_page"))
 
 

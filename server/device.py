@@ -61,7 +61,7 @@ def process_report(conn, client_id, action, extra_args):
     if action and action != "poll":
         db.insert_action_log(conn, client_id, action, extra_args if extra_args else None, "device")
 
-    lock_override = usage_tracking.check_usage(conn, client_id, device["name"], action)
+    lock_override = usage_tracking.check_usage(conn, client_id, device["alias"] or device["name"], action)
 
     commands = db.get_and_clear_pending_commands(conn, client_id)
     conn.commit()
@@ -149,6 +149,14 @@ def bulk_command(conn, action, duration_mins=None):
 
     conn.commit()
     return _relock_at
+
+
+def push_provisioning_config(conn, provision_config):
+    devices = db.get_all_devices(conn)
+    cmd = {"name": "provisioning_config", **provision_config}
+    for d in devices:
+        db.replace_pending_command(conn, d["id"], "provisioning_config", cmd)
+    conn.commit()
 
 
 def get_device_detail(conn, device_id, screenshots_dir):

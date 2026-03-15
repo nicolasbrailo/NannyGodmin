@@ -69,6 +69,12 @@ section img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
 figure { margin: 30px 0; }
 figure img { border: 8px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
 
+/* Config table */
+.config-table td:first-child { white-space: nowrap; width: 1%; font-weight: bold; color: #555; }
+.config-table td:last-child { width: 100%; }
+.config-table input[type=number],
+.config-table input[type=text] { width: 100%; box-sizing: border-box; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; }
+
 /* Mobile: stack device info + controls on two lines */
 @media (max-width: 600px) {
     .device-row { gap: 6px; padding: 10px 12px; }

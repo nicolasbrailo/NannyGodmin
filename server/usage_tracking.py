@@ -84,7 +84,7 @@ def _get_tracker(conn, device_id):
 
 def _notify_threshold(device_id, device_name, usage_mins, threshold_mins):
     """Notify that a device has exceeded its daily usage threshold."""
-    msg = (f"Device '{device_name}' ({device_id[:8]}...) reached "
+    msg = (f"'{device_name}' reached "
            f"{usage_mins:.0f}min usage (threshold: {threshold_mins}min)")
     print(f"[ALERT] {datetime.now().strftime('%H:%M:%S')} — {msg}")
 
