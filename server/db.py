@@ -132,6 +132,20 @@ def get_app_and_screen_events(db, device_id):
     ).fetchall()
 
 
+def get_current_foreground_app(db, device_id):
+    row = db.execute(
+        "SELECT args FROM action_log "
+        "WHERE device_id = ? AND action = 'app_change' "
+        "ORDER BY timestamp DESC LIMIT 1",
+        (device_id,),
+    ).fetchone()
+    if row and row["args"]:
+        args = json.loads(row["args"])
+        app = args.get("new_activity", "Unknown")
+        return app.split("/")[0] if "/" in app else app
+    return None
+
+
 def get_current_screen_state(db, device_id):
     row = db.execute(
         "SELECT action FROM action_log "

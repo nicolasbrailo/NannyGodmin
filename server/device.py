@@ -61,7 +61,7 @@ def process_report(conn, client_id, action, extra_args):
     if action and action != "poll":
         db.insert_action_log(conn, client_id, action, extra_args if extra_args else None, "device")
 
-    lock_override = usage_tracking.check_usage(conn, client_id, device["alias"] or device["name"], action)
+    lock_override = usage_tracking.check_usage(conn, client_id, device["alias"] or device["name"], action, extra_args)
 
     commands = db.get_and_clear_pending_commands(conn, client_id)
     conn.commit()

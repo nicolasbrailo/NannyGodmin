@@ -27,6 +27,7 @@ CONFIG_DEFAULTS = {
     "daily_limit_mins": 120,
     "auto_lock": False,
     "fail_open": False,
+    "usage_ignore_regex": None,
     "warning_enabled": False,
     "warning_mins": 5,
     "telegram_bot_token": None,
@@ -54,6 +55,7 @@ def _alert_config(config):
         "auto_lock": config["auto_lock"],
         "warning_enabled": config["warning_enabled"],
         "warning_mins": config["warning_mins"],
+        "usage_ignore_regex": config["usage_ignore_regex"],
         "telegram_bot_token": config["telegram_bot_token"],
         "telegram_chat_id": config["telegram_chat_id"],
     }
@@ -233,6 +235,9 @@ def config_save():
 
     fail_open = request.form.get("fail_open")
     db.set_config(conn, "fail_open", fail_open == "on")
+
+    usage_ignore_regex = request.form.get("usage_ignore_regex", "").strip()
+    db.set_config(conn, "usage_ignore_regex", usage_ignore_regex or None)
 
     warning_enabled = request.form.get("warning_enabled")
     db.set_config(conn, "warning_enabled", warning_enabled == "on")

@@ -1,4 +1,5 @@
 import logging
+import re
 import sys
 from datetime import datetime
 
@@ -13,6 +14,7 @@ log = logging.getLogger(__name__)
 _alert_config = {
     "daily_limit_mins": None,  # None = disabled
     "auto_lock": False,
+    "usage_ignore_regex": None,
     "warning_enabled": False,
     "warning_mins": 5,
     "telegram_bot_token": None,
@@ -20,16 +22,31 @@ _alert_config = {
 }
 
 _telegram_bot = None
+_usage_ignore_re = None  # compiled regex, None means nothing ignored
 
 _usage_trackers = {}  # device_id -> tracker dict
 
 
+def _is_app_ignored(app):
+    return app is not None and _usage_ignore_re is not None and _usage_ignore_re.search(app)
+
+
 def configure(config):
-    global _alert_config, _telegram_bot
+    global _alert_config, _telegram_bot, _usage_ignore_re
     _alert_config = config
     for tracker in _usage_trackers.values():
         tracker["triggered"] = False
         tracker["warned"] = False
+
+    pattern = config.get("usage_ignore_regex")
+    if pattern:
+        try:
+            _usage_ignore_re = re.compile(pattern)
+        except re.error:
+            log.warning("Invalid usage_ignore_regex: %s", pattern)
+            _usage_ignore_re = None
+    else:
+        _usage_ignore_re = None
 
     token = config.get("telegram_bot_token")
     chat_id = config.get("telegram_chat_id")
@@ -59,7 +76,8 @@ def _seed_tracker(conn, device_id):
     dev = db.get_device(conn, device_id)
     server_locked = bool(dev["locked"])
     screen_on = db.get_current_screen_state(conn, device_id)
-    active = screen_on and not server_locked
+    current_app = db.get_current_foreground_app(conn, device_id)
+    active = screen_on and not server_locked and not _is_app_ignored(current_app)
     now = datetime.now()
 
     tracker = {
@@ -68,6 +86,7 @@ def _seed_tracker(conn, device_id):
         "active_since": now if active else None,
         "screen_on": screen_on,
         "server_locked": server_locked,
+        "current_app": current_app,
         "triggered": False,
         "warned": False,
         "auto_locked": False,
@@ -105,7 +124,7 @@ def _get_threshold(conn, device_id):
     return _alert_config.get("daily_limit_mins")
 
 
-def check_usage(conn, device_id, device_name, action):
+def check_usage(conn, device_id, device_name, action, extra_args=None):
     """Update usage tracker and check threshold. Called on every device report."""
     threshold = _get_threshold(conn, device_id)
     if threshold is None:
@@ -135,9 +154,14 @@ def check_usage(conn, device_id, device_name, action):
         tracker["screen_on"] = True
     elif action == "screen_off":
         tracker["screen_on"] = False
+    elif action == "app_change" and extra_args:
+        app = extra_args.get("new_activity", "Unknown")
+        app_name = app.split("/")[0] if "/" in app else app
+        if app_name != "Unknown":
+            tracker["current_app"] = app_name
 
     # Recompute active state
-    new_active = tracker["screen_on"] and not tracker["server_locked"]
+    new_active = tracker["screen_on"] and not tracker["server_locked"] and not _is_app_ignored(tracker.get("current_app"))
     was_active = tracker["active_since"] is not None
 
     if was_active and not new_active:

@@ -27,6 +27,10 @@
         <h2>Usage Alerts</h2>
         <table class="config-table">
             <tr>
+                <td>Usage ignore regex</td>
+                <td><input type="text" name="usage_ignore_regex" value="{{ config.usage_ignore_regex or '' }}" placeholder="e.g. com\.example\..*"></td>
+            </tr>
+            <tr>
                 <td>Daily usage limit (minutes)</td>
                 <td><input type="number" name="daily_limit_mins" value="{{ config.daily_limit_mins if config.daily_limit_mins is not none else '' }}" min="1" placeholder="blank to disable"></td>
             </tr>
