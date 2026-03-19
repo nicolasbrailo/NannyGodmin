@@ -178,9 +178,9 @@ def get_current_screen_state(db, device_id):
 
 
 def get_last_report_time(db, device_id):
-    """Get the timestamp of the last action_log entry for a device."""
+    """Get the timestamp of the last device-reported action_log entry."""
     row = db.execute(
-        "SELECT MAX(timestamp) as last_ts FROM action_log WHERE device_id = ?",
+        "SELECT MAX(timestamp) as last_ts FROM action_log WHERE device_id = ? AND source = 'device'",
         (device_id,),
     ).fetchone()
     return row["last_ts"] if row and row["last_ts"] else None

@@ -20,17 +20,30 @@ _relock_timer = None
 _relock_at = None
 
 
+def _staleness_info(conn, device_id):
+    """Return (is_stale, is_unknown, last_report_time, now_cap) for a device.
+
+    is_stale: device hasn't reported within the staleness window.
+    is_unknown: stale AND the last screen event was not screen_off — we don't
+                know the actual device state (e.g. battery died, service killed).
+                When stale but last event was screen_off, the state is known (inactive).
+    """
+    staleness = usage_tracking.get_staleness_secs()
+    last_ts = db.get_last_report_time(conn, device_id)
+    last_report = datetime.fromisoformat(last_ts) if last_ts else None
+    if not staleness or not last_report:
+        return False, False, last_ts, None
+    elapsed = (datetime.now() - last_report).total_seconds()
+    is_stale = elapsed > staleness
+    cap = (last_report + timedelta(seconds=staleness)) if is_stale else None
+    is_unknown = is_stale and db.get_current_screen_state(conn, device_id)
+    return is_stale, is_unknown, last_ts, cap
+
+
 def _staleness_cap(conn, device_id):
     """Compute a now-cap for timeline functions if the device is stale."""
-    staleness = usage_tracking.get_staleness_secs()
-    if not staleness:
-        return None
-    last_ts = db.get_last_report_time(conn, device_id)
-    if not last_ts:
-        return None
-    last_report = datetime.fromisoformat(last_ts)
-    cap = last_report + timedelta(seconds=staleness)
-    return cap if cap < datetime.now() else None
+    _, _, _, cap = _staleness_info(conn, device_id)
+    return cap
 
 
 def configure_alerts(config):
@@ -41,13 +54,15 @@ def get_all_devices_with_usage(conn):
     devices = db.get_all_devices(conn)
     ignore_re = usage_tracking._usage_ignore_re
     usage_today = {}
+    device_staleness = {}
     for d in devices:
-        cap = _staleness_cap(conn, d["id"])
+        is_stale, is_unknown, last_report_ts, cap = _staleness_info(conn, d["id"])
         active, ignored = device_timeline.get_today_usage_split(conn, d["id"], ignore_re, now_cap=cap)
         usage_today[d["id"]] = {"active_mins": active, "ignored_mins": ignored}
+        device_staleness[d["id"]] = {"is_stale": is_stale, "is_unknown": is_unknown, "last_report": last_report_ts}
     groups = db.get_all_device_groups(conn)
     groups_by_id = {g["id"]: g for g in groups}
-    return devices, usage_today, groups_by_id
+    return devices, usage_today, groups_by_id, device_staleness
 
 
 def set_device_alias(conn, device_id, alias):
@@ -209,6 +224,8 @@ def get_device_detail(conn, device_id, screenshots_dir):
     daily_slots, slot_hours = device_timeline.compute_daily_slots(transitions, now_cap=cap)
     app_timeline = device_timeline.compute_app_timeline(conn, device_id, now_cap=cap)
 
+    is_stale, is_unknown, last_report_ts, _ = _staleness_info(conn, device_id)
+
     return {
         "device": device_row,
         "screenshot_filename": screenshot_filename,
@@ -218,6 +235,9 @@ def get_device_detail(conn, device_id, screenshots_dir):
         "ignored_daily_hours": ignored_daily_hours,
         "slot_hours": slot_hours,
         "app_timeline": app_timeline,
+        "is_stale": is_stale,
+        "is_unknown": is_unknown,
+        "last_report": last_report_ts,
     }
 
 

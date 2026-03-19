@@ -181,9 +181,14 @@ def _get_group_state(group_id, today):
 def _get_group_usage_secs(group_id, now):
     """Sum accumulated usage across all trackers belonging to a group."""
     staleness = get_staleness_secs()
+    today = now.strftime("%Y-%m-%d")
     total = 0
     for tracker in _usage_trackers.values():
         if tracker.get("group_id") != group_id:
+            continue
+        # Skip stale trackers from previous days — their accumulated_secs
+        # belongs to a past day and shouldn't count toward today's total.
+        if tracker["date"] != today:
             continue
         total += tracker["accumulated_secs"]
         if tracker["counting_since"]:

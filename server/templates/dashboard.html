@@ -55,7 +55,9 @@
 
     {% macro device_row(device) %}
     <div class="device-row">
-        {% if device.locked %}
+        {% if device_staleness[device.id].is_unknown %}
+        <mark class="stale">UNKNOWN</mark>
+        {% elif device.locked %}
         <mark class="locked">LOCKED</mark>
         {% else %}
         <mark class="unlocked">UNLOCKED</mark>

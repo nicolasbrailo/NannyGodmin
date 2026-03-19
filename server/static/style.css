@@ -29,6 +29,8 @@ mark { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 
 .device-row mark { width: 80px; text-align: center; padding: 2px 0; flex-shrink: 0; }
 mark.locked { background: #e74c3c; }
 mark.unlocked { background: #2ecc71; }
+mark.stale { background: #95a5a6; }
+.stale-banner { background: #f39c12; color: #fff; padding: 6px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 0.9em; }
 
 /* Flex control bars */
 nav { margin: 20px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

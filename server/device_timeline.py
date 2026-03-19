@@ -357,15 +357,36 @@ def compute_app_timeline(conn, device_id, now_cap=None):
     # When the screen briefly turns off and comes back to the same app
     # (e.g. auto-lock, brief screen-off), treat it as one continuous session.
     # The gap time is absorbed into the merged span.
+    # Never merge across day boundaries so each day's usage stays distinct.
     MAX_GAP = 300  # 5 minutes
     gap_merged = []
     for span in merged:
         if (gap_merged
                 and gap_merged[-1]["app"] == span["app"]
-                and (span["start"] - gap_merged[-1]["end"]).total_seconds() < MAX_GAP):
+                and (span["start"] - gap_merged[-1]["end"]).total_seconds() < MAX_GAP
+                and gap_merged[-1]["start"].date() == span["start"].date()):
             gap_merged[-1]["end"] = span["end"]
         else:
             gap_merged.append(dict(span))
+
+    # Phase 6: Split spans that cross midnight so each span stays within one day.
+    day_split = []
+    for span in gap_merged:
+        cursor = span["start"]
+        end = span["end"]
+        while cursor < end:
+            midnight = (cursor + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            segment_end = min(end, midnight)
+            day_split.append({"app": span["app"], "start": cursor, "end": segment_end})
+            cursor = segment_end
+
+    # If the device is stale (now_cap was applied), append a synthetic
+    # "Device inactive" span from the cap to the real current time so the
+    # timeline makes the gap visible instead of silently ending.
+    if now_cap is not None and day_split:
+        now = datetime.now(timezone.utc) if day_split[-1]["end"].tzinfo else datetime.now()
+        if now > now_cap:
+            day_split.append({"app": "Device inactive", "start": now_cap, "end": now})
 
     return [
         {
@@ -374,5 +395,5 @@ def compute_app_timeline(conn, device_id, now_cap=None):
             "end": s["end"].isoformat(),
             "duration_secs": int((s["end"] - s["start"]).total_seconds()),
         }
-        for s in gap_merged
+        for s in day_split
     ]

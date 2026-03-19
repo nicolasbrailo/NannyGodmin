@@ -12,12 +12,17 @@
 
     <h1>
         <img src="{{ url_for('favicon') }}" alt="">{{ device.alias or device.name }}
-        {% if device.locked %}
+        {% if is_unknown %}
+        <mark class="stale">UNKNOWN</mark>
+        {% elif device.locked %}
         <mark class="locked">LOCKED</mark>
         {% else %}
         <mark class="unlocked">UNLOCKED</mark>
         {% endif %}
     </h1>
+    {% if is_unknown %}
+    <div class="stale-banner">Device in unknown state, last reported at {{ last_report }}</div>
+    {% endif %}
     <nav>
         {% if device.locked %}
         <form action="{{ url_for('send_command', device_id=device.id) }}" method="post">

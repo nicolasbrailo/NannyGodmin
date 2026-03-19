@@ -67,7 +67,7 @@ def _alert_config(config):
 
 @app.route("/")
 def dashboard():
-    devices, usage_today, groups_by_id = device.get_all_devices_with_usage(get_db())
+    devices, usage_today, groups_by_id, device_staleness = device.get_all_devices_with_usage(get_db())
     relock_at = device.get_relock_at()
     relock_at = relock_at.isoformat() if relock_at else None
     # Compute per-group aggregated usage
@@ -77,7 +77,8 @@ def dashboard():
         if gid:
             group_usage[gid] = group_usage.get(gid, 0) + usage_today[d["id"]]["active_mins"]
     return render_template("dashboard.html", devices=devices, usage_today=usage_today,
-                           groups_by_id=groups_by_id, group_usage=group_usage, relock_at=relock_at)
+                           groups_by_id=groups_by_id, group_usage=group_usage, relock_at=relock_at,
+                           device_staleness=device_staleness)
 
 
 @app.route("/new_device")
@@ -171,6 +172,9 @@ def device_detail(device_id):
         global_daily_limit_mins=config["daily_limit_mins"],
         groups=groups,
         current_group=current_group,
+        is_stale=detail["is_stale"],
+        is_unknown=detail["is_unknown"],
+        last_report=detail["last_report"],
     )
 
 
